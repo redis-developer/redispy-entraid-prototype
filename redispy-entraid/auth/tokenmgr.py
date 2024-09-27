@@ -21,7 +21,7 @@ class DefaultTokenManagerConfig(TokenManagerConfig):
 
 
 '''
-A job that ensures that token
+A job that notifies when tokens are renewed
 '''
 class TokenManager:
     def __init__(self, identiy_provider, config=DefaultTokenManagerConfig()):
