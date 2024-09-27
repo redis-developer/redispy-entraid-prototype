@@ -22,6 +22,16 @@ class Token:
         return self.exp - datetime.utcnow()
 
 
+    '''
+    Indicates if the token should be seen as expired.
+    
+    This method is intended to be overridden if the identity provider offers more sophisticated
+    methods.
+    '''
+    def is_expired(self) -> bool:
+        return self.ttl() <= 0
+
+
 
 
 '''
