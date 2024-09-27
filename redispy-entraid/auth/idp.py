@@ -23,7 +23,7 @@ class IdentityProviderInterface:
     '''
     Receive a token from the identity provider. Receiving a token only works when being authenticated.
     '''
-    def receive_token(self):
+    def request_token(self):
         pass
 
 
@@ -52,7 +52,7 @@ class FakeIdentiyProvider(IdentityProviderInterface):
 
         return False
 
-    def receive_token(self) -> Token:
+    def request_token(self) -> Token:
         if self.is_authenticated:
             payload = {
                 "user_id": 123,

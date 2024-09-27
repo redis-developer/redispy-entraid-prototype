@@ -31,8 +31,8 @@ class EntraIdToken(JWToken):
     def __init__(self, value, thr=0.25):
         super().__init__(value)
         self.thr = thr
-        self.issued_at = self.meta["iat"]
-        self.ttl_max = self.exp - self.issued_at
+        self.received_at = self.meta["iat"]
+        self.ttl_max = self.expires_at - self.received_at
 
     '''
     This method overrides the standard behaviour of 'is_expired'. We assume that the token is expired before 
@@ -103,7 +103,7 @@ class EntraIdIdentiyProvider(IdentityProviderInterface):
     '''
     Receive a token from EntraId
     '''
-    def receive_token(self):
+    def request_token(self):
         if not self.is_authenticated:
             raise ErrNotAuthenticated()
         try:

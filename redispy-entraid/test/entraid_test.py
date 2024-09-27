@@ -11,7 +11,7 @@ class EntraIdIdpTest(TestCase):
         self.assertTrue(tenant_id)
 
         idp = EntraIdIdentiyProvider(tenant_id, client_id, client_secret)
-        token = idp.receive_token()
+        token = idp.request_token()
 
         self.assertTrue(token.value)
         print("token_value = {}".format(token.value))
@@ -19,5 +19,5 @@ class EntraIdIdpTest(TestCase):
         self.assertTrue(token.meta)
         print("token_meta = {}".format(token.meta))
 
-        self.assertNotEquals(token.exp, -1)
-        print("token_exp = {}".format(token.exp))
+        self.assertNotEquals(token.expires_at, -1)
+        print("token_exp = {}".format(token.expires_at))

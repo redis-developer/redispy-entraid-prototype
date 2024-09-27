@@ -8,7 +8,7 @@ class FakeIdpTest(TestCase):
         self.assertTrue(idp.authenticate())
         self.assertTrue(idp.is_authenticated)
 
-        token = idp.receive_token().value
+        token = idp.request_token().value
         print("\ntoken = {}".format(token))
         self.assertTrue(token)
 
@@ -19,7 +19,7 @@ class FakeIdpTest(TestCase):
         self.assertFalse(idp.is_authenticated)
 
         try:
-            idp.receive_token().value
+            idp.request_token().value
         except Exception as err:
             self.assertEqual("You are not authenticated.", str(err))
 
