@@ -17,7 +17,7 @@ class Token:
         self.meta = {}
 
     '''
-    Calculate how the token has still to live
+    Calculate how many seconds token has still to live
     '''
     def ttl(self):
         return self.expires_at - datetime.utcnow().timestamp()

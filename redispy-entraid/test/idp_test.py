@@ -1,5 +1,5 @@
 from unittest import TestCase
-from auth.idp import FakeIdentiyProvider
+from redisauth.idp import FakeIdentiyProvider
 
 
 class FakeIdpTest(TestCase):

@@ -1,4 +1,4 @@
-from auth.entraid import EntraIdIdentiyProvider
+from redisauth.entraid import EntraIdIdentiyProvider
 from unittest import TestCase
 import os
 

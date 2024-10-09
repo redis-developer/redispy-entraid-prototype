@@ -1,10 +1,9 @@
-from pycparser.ply.yacc import token
-
-from auth.idp import IdentityProviderInterface
-from auth.err import  ErrNotAuthenticated, ErrCantReceiveToken
+from redisauth.idp import IdentityProviderInterface
+from redisauth.err import  ErrNotAuthenticated, ErrCantReceiveToken
+from redisauth.token import JWToken
 from enum import Enum
 from msal import ConfidentialClientApplication
-from auth.token import JWToken
+import logging
 
 '''
 The authentication methods that are supported by our identity provider implementation
@@ -65,18 +64,17 @@ class EntraIdIdentiyProvider(IdentityProviderInterface):
         if scope:
             creds["scope"] = scope
 
+
+        self.app = None
+
         # Calls authenticate
         super().__init__(creds)
 
     '''
     Authenticate by using the Microsoft authentication library
     '''
-    def authenticate(self, creds = None) -> bool:
+    def authenticate(self, creds) -> bool:
         success = False
-
-        # Use the original creds unless they are overridden
-        if not creds:
-            creds = self.creds
 
         if creds.get("type") == AuthMethods.SERVICE_PRINCIPAL.name:
             # Authenticate via a service principal / client application
@@ -93,8 +91,7 @@ class EntraIdIdentiyProvider(IdentityProviderInterface):
                 if "access_token" in token_dict:
                     success = True
             except Exception as e:
-                #TODO: Add logging
-                print(e)
+                logging.error(e)
 
         self.is_authenticated = success
         return success
@@ -107,12 +104,11 @@ class EntraIdIdentiyProvider(IdentityProviderInterface):
         if not self.is_authenticated:
             raise ErrNotAuthenticated()
         try:
-            scopes = [self.creds.get("scope")]
+            scopes = [EntraIdCreds().get("scope")]
             token_value = self.app.acquire_token_for_client(scopes)["access_token"]
             return EntraIdToken(token_value)
         except Exception as e:
-            #TODO: Add logging
-            print(e)
+            logging.error(e)
             raise ErrCantReceiveToken()
 
 

@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
-from auth.token import Token, JWToken
-from auth.err import ErrNotAuthenticated
+from redisauth.token import Token, JWToken
+from redisauth.err import ErrNotAuthenticated
 
 '''
 This interface is the facade of an identity provider
@@ -9,15 +9,12 @@ This interface is the facade of an identity provider
 class IdentityProviderInterface:
 
     def __init__(self, creds):
-        self.creds = creds
         self.is_authenticated = self.authenticate(creds)
 
     '''
-    Authenticate with the identity provider by using the credentials
-    
-    If no credentials are passed, then the original credentials are used.
+    Authenticate with the identity provider by using the credentials.
     '''
-    def authenticate(self, creds=None) -> bool:
+    def authenticate(self, creds) -> bool:
         pass
 
     '''
