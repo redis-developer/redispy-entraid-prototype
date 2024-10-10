@@ -4,12 +4,24 @@ from time import sleep
 from pycparser.ply.yacc import token
 
 from redisauth.entraid import EntraIdIdentiyProvider
+from redisauth.idp import FakeIdentiyProvider
 from redisauth.tokenmgr import TokenExpiryListener, TokenManagerConfig
 from unittest import TestCase
-
 import os
 
 from redisauth.tokenmgr import TokenManager
+
+
+'''
+Function to check if we can automatically stop the token manager if it is no longer referenced
+'''
+def run_token_manager():
+    print("-- run_token_manager START")
+    token_mgr = TokenManager(FakeIdentiyProvider("testuser", "password"), TokenManagerConfig())
+    token_mgr.start(TokenExpiryListener())
+    print("Keep the function running for about 5 seconds.")
+    sleep(5)
+    print("-- run_token_manager EXIT")
 
 
 class TokenManagerTest(TestCase):
@@ -33,7 +45,7 @@ class TokenManagerTest(TestCase):
         idp = EntraIdIdentiyProvider(tenant_id, client_id, client_secret)
 
         # EntraId tokens have TTL of 3 hours. So, let's mimic to expire them after 10 seconds
-        token_mgr_config = TokenManagerConfig(ttl_min_time=10790, check_interval=2)
+        token_mgr_config = TokenManagerConfig(ttl_min_time=10790, check_interval=1)
         token_mgr = TokenManager(idp, token_mgr_config)
         listener = TokenExpiryListener()
         listener.add_callback(self.printing_callback)
@@ -48,6 +60,13 @@ class TokenManagerTest(TestCase):
         token_mgr.stop()
 
         # It might a cycle to stop the thread
+        sleep(5)
+        self.assertEqual(1, threading.active_count())
+
+    def  test_token_mrg_disposal(self):
+        self.assertEqual(1, threading.active_count())
+        run_token_manager()
+        print("After the function exited wait up to 5 seconds to let the garbage collector clean the manager and its thread.")
         sleep(5)
         self.assertEqual(1, threading.active_count())
 
