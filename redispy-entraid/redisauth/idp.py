@@ -54,7 +54,7 @@ class FakeIdentiyProvider(IdentityProviderInterface):
             payload = {
                 "user_id": 123,
                 "username": "testuser",
-                "exp": datetime.utcnow() + timedelta(minutes=30)
+                "exp": datetime.utcnow() + timedelta(seconds=10)
             }
 
             value = jwt.encode(payload, self.SIGN, "HS256")

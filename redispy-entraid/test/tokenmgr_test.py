@@ -1,8 +1,5 @@
 import threading
 from time import sleep
-
-from pycparser.ply.yacc import token
-
 from redisauth.entraid import EntraIdIdentiyProvider
 from redisauth.idp import FakeIdentiyProvider
 from redisauth.tokenmgr import TokenExpiryListener, TokenManagerConfig

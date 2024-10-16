@@ -26,14 +26,22 @@ Listens to token expirations
 class TokenExpiryListener:
     def __init__(self):
         self.callbacks = []
+        self.err_callbacks = []
 
     # Add listener callback function
     def add_callback(self, callback):
         self.callbacks.append(callback)
 
-    def on_token_renewed(self, token):
+    def add_err_callback(self, callback):
+        self.err_callbacks.append(callback)
+
+    def on_token_renewed(self, token : Token):
         for cb in self.callbacks:
             cb(token)
+
+    def on_token_renew_err(self, error : Exception):
+        for cb in self.err_callbacks:
+            cb(error)
 
 
 
@@ -49,36 +57,40 @@ def _monitor_token(weak_mgr_ref, token : Token, listener : TokenExpiryListener):
             # Resolve the weak reference to the actual token manager
             mgr = weak_mgr_ref()
 
+            # A bit dirty, but not all Python versions allow assigning variables within a while loop.
             if (mgr is None) or (mgr._stop_event.isSet()):
                 break
 
-            # Check if the token is expired based on the configuration
-            # If the default config is used, then we leave it to the token implementation to tell us if the token is expired
-            is_expired = False
+            try:
+                # Check if the token is expired based on the configuration
+                # If the default config is used, then we leave it to the token implementation to tell us if the token is expired
+                is_expired = False
 
-            if not token:
-                is_expired = True
-            else:
-                logging.debug("ttl = {}".format(token.ttl()))
-                print("ttl = {}".format(token.ttl()))
+                if not token:
+                    is_expired = True
+                else:
+                    logging.debug("ttl = {}".format(token.ttl()))
 
-                if mgr.config.ttl_min_ratio == -1 and mgr.config.ttl_min_time == -1:
-                    is_expired = token.is_expired()
-                elif mgr.config.ttl_min_time != -1:
-                    is_expired = (token.ttl() <= mgr.config.ttl_min_time)
-                # Not every token implementation has a ttl_max property. We should check if the configuration makes sense
-                elif mgr.config.ttl_min_ratio != -1:
-                    if hasattr(token, 'ttl_max') and not is_expired:
-                        is_expired = (token.ttl() / token.ttl_max <= mgr.config.ttl_min_ratio)
-                    else:
-                        raise ErrInvalidTokenMgrConfig()
+                    if mgr.config.ttl_min_ratio == -1 and mgr.config.ttl_min_time == -1:
+                        is_expired = token.is_expired()
+                    elif mgr.config.ttl_min_time != -1:
+                        is_expired = (token.ttl() <= mgr.config.ttl_min_time)
+                    # Not every token implementation has a ttl_max property. We should check if the configuration makes sense
+                    elif mgr.config.ttl_min_ratio != -1:
+                        if hasattr(token, 'ttl_max') and not is_expired:
+                            is_expired = (token.ttl() / token.ttl_max <= mgr.config.ttl_min_ratio)
+                        else:
+                            raise ErrInvalidTokenMgrConfig()
 
-            # Refresh the token if it is expired and wait a second
-            if is_expired:
-                token = mgr.idp.request_token()
-                listener.on_token_renewed(token)
+                # Refresh the token if it is expired and wait a second
+                if is_expired:
+                    token = mgr.idp.request_token()
+                    listener.on_token_renewed(token)
 
-            sleep(mgr.config.check_interval)
+                sleep(mgr.config.check_interval)
+
+            except Exception as error:
+                listener.on_token_renew_err(error)
 
             # Get rid of the manager reference to allow the garbage collector to clean it up.
             mgr = None
@@ -112,8 +124,7 @@ class TokenManager:
         # Avoid that the thread has a back reference o the token manager
         weak_mgr_ref = weakref.ref(self)
 
-        # Setting daemon to True guarantees that the thread is killed as soon as it leaves context
-        # self._token_mgr_thread = threading.Thread(target=self._monitor_token, args=(initial_token, listener), daemon=True)
+        # Setting daemon to True guarantees that the thread is killed as soon as the main thread is terminated.
         self._token_mgr_thread = threading.Thread(target=_monitor_token, args=(weak_mgr_ref, initial_token, listener),
                                                   daemon=True)
         self._token_mgr_thread.start()
