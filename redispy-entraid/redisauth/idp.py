@@ -21,13 +21,8 @@ class IdentityProviderInterface(ABC):
 
 
 class IdentityProviderConfigInterface(ABC):
-    @property
     @abstractmethod
-    def provider(self) -> IdentityProviderInterface:
-        pass
-
-    @provider.setter
-    def provider(self, provider: IdentityProviderInterface):
+    def get_provider(self) -> IdentityProviderInterface:
         pass
 
 
