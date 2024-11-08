@@ -10,7 +10,7 @@ A token has a
 
 '''
 class Token:
-    def __init__(self, value, expires_at = -1,  received_at = datetime.utcnow().timestamp()):
+    def __init__(self, value: str, expires_at = -1,  received_at = datetime.utcnow().timestamp()):
         self.value = value
         self.expires_at = expires_at
         self.received_at = received_at

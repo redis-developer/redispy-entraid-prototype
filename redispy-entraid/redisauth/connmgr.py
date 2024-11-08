@@ -1,10 +1,8 @@
 from pycparser.ply.yacc import token
 from redis import Redis
 
-from redisauth.token import Token
-from redisauth.tokenmgr import TokenManager, TokenExpiryListener
-import redis
-
+from .token import Token
+from .tokenmgr import TokenManager, TokenExpiryListener
 
 '''
 The connection manager is responsible for reauthenticating the connections when tokens need to be
@@ -28,7 +26,7 @@ class ConnectionManager:
     This callback is going to be used by the token manager's thread
     '''
     def _token_refreshed_callback(self, token):
-        self.authenticate_connection(self.client, token)
+        self.authenticate_connection(token)
 
     '''
     This callback gets invoked the token manager faces an error
@@ -36,11 +34,11 @@ class ConnectionManager:
     def _token_refresh_err_callback(self, error):
         print(error)
 
-    def authenticate_connection(self, client : redis.Redis, token : Token):
+    def authenticate_connection(self,  token : Token):
 
         # -- TODO
         # The standalone client uses a connection pool behind the scenes.
-        pool = client.connection_pool
+        pool = self.client.connection_pool
 
         # We need to reauthenticate on the available and the connections that are in use
         for  conn in pool._available_connections:

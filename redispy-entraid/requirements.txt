@@ -1,3 +1,4 @@
 PyJWT~=2.9.0
 pytest
 msal~=1.31.0
+redis
