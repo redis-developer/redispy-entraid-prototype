@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 import jwt
 from datetime import datetime, timedelta
 from redisauth.token import Token, JWToken
@@ -6,48 +8,42 @@ from redisauth.err import ErrNotAuthenticated
 '''
 This interface is the facade of an identity provider
 '''
-class IdentityProviderInterface:
 
-    def __init__(self, creds):
-        self.is_authenticated = self.authenticate(creds)
 
-    '''
-    Authenticate with the identity provider by using the credentials.
-    '''
-    def authenticate(self, creds) -> bool:
-        pass
-
-    '''
+class IdentityProviderInterface(ABC):
+    """
     Receive a token from the identity provider. Receiving a token only works when being authenticated.
-    '''
+    """
+
+    @abstractmethod
     def request_token(self):
         pass
 
+
+class IdentityProviderConfigInterface(ABC):
+    @abstractmethod
+    def get_provider(self) -> IdentityProviderInterface:
+        pass
 
 
 '''
 A very simple fake identity provider for testing purposes
 '''
-class FakeIdentiyProvider(IdentityProviderInterface):
 
+
+class FakeIdentityProvider(IdentityProviderInterface):
     SIGN = "secret"
 
     '''
     Initialize by authenticating
     '''
+
     def __init__(self, user, password):
-        self.creds = { 'user' : user, 'password' : password}
-        super().__init__(self.creds)
+        self.creds = {'user': user, 'password': password}
+        self.is_authenticated = False
 
-    def authenticate(self, creds=None) -> bool:
-
-        if not creds:
-            creds = self.creds
-
-        if creds['user'] == "testuser" and creds['password'] == "password":
-            return True
-
-        return False
+        if self.creds['user'] == "testuser" and self.creds['password'] == "password":
+            self.is_authenticated = True
 
     def request_token(self) -> Token:
         if self.is_authenticated:
