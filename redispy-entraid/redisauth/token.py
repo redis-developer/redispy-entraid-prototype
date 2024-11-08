@@ -1,5 +1,7 @@
+from abc import ABC, abstractmethod
+
 import jwt
-from datetime import datetime
+from datetime import datetime, timezone
 
 '''
 A token has a 
@@ -9,57 +11,97 @@ A token has a
 - A method that allows calculating its time to live
 
 '''
-class Token:
-    def __init__(self, value: str, expires_at = -1,  received_at = datetime.utcnow().timestamp()):
+
+
+class TokenInterface(ABC):
+    @abstractmethod
+    def is_expired(self) -> bool:
+        pass
+
+    @abstractmethod
+    def ttl(self) -> float:
+        pass
+
+    @abstractmethod
+    def try_get(self, key: str) -> str:
+        pass
+
+    @abstractmethod
+    def get_value(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_expires_at(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_received_at(self) -> int:
+        pass
+
+
+class SimpleToken(TokenInterface):
+    def __init__(self, value: str, expires_at: int, received_at: int, claims: dict[str, str]) -> None:
         self.value = value
         self.expires_at = expires_at
         self.received_at = received_at
-        self.meta = {}
+        self.claims = claims
 
-    '''
-    Calculate how many seconds token has still to live
-    '''
-    def ttl(self):
-        return self.expires_at - datetime.utcnow().timestamp()
+    def ttl(self) -> float:
+        if self.expires_at == -1:
+            return -1
 
+        return self.expires_at - datetime.now(timezone.utc).timestamp()
 
-    '''
-    Indicates if the token should be seen as expired.
-    
-    This method is intended to be overridden if the identity provider offers more sophisticated
-    methods.
-    '''
     def is_expired(self) -> bool:
+        if self.expires_at == -1:
+            return False
+
         return self.ttl() <= 0
 
+    def try_get(self, key: str) -> str:
+        return self.claims.get(key)
 
-    '''
-    Checks if the token is still valid.
-    
-    This method is intended to be overridden if the identity provider offers mechanisms beyond checking
-    the expiration time (e.g., checking signatures)
-    '''
-    def is_valid(self) -> bool:
-        return self.is_expired()
+    def get_value(self) -> str:
+        return self.value
+
+    def get_expires_at(self) -> int:
+        return self.expires_at
+
+    def get_received_at(self) -> int:
+        return self.received_at
 
 
+class JWToken(TokenInterface):
+    def __init__(self, token: str):
+        self._value = token
+        self._decoded = jwt.decode(
+            self._value,
+            options={"verify_signature": False},
+            algorithms=[jwt.get_unverified_header(self._value).get('alg')]
+        )
 
+    def is_expired(self) -> bool:
+        exp = self._decoded['exp']
+        if exp == -1:
+            return False
 
-'''
-A JSON Web Token has meta data encoded as JSON
-'''
-class JWToken(Token):
-    def __init__(self, value, expires_at = -1,  received_at = datetime.utcnow().timestamp()):
-        super().__init__(value, expires_at, received_at)
-        self.meta = self._decode_meta()
+        return self._decoded['exp'] <= datetime.now(timezone.utc).timestamp()
 
-        # If the expiration time is not given, then try to derive it from the JWT token
-        if expires_at == -1:
-            self.expires_at = self.meta['exp']
+    def ttl(self) -> float:
+        exp = self._decoded['exp']
+        if exp == -1:
+            return -1
 
-    '''
-    Decode the token meta data
-    '''
-    def _decode_meta(self):
-            return jwt.decode(self.value, options={"verify_signature": False})
+        return self._decoded['exp'] - datetime.now(timezone.utc).timestamp()
 
+    def try_get(self, key: str) -> str:
+        return self._decoded.get(key)
+
+    def get_value(self) -> str:
+        return self._value
+
+    def get_expires_at(self) -> int:
+        return self._decoded['exp']
+
+    def get_received_at(self) -> int:
+        return self._decoded['iat']
