@@ -84,7 +84,7 @@ class TestTokenManager:
 
     def test_success_token_renewal_with_on_complete(self):
         tokens = []
-        isComplete = False
+        is_complete = False
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.return_value = SimpleToken(
             'value',
@@ -98,8 +98,8 @@ class TestTokenManager:
             tokens.append(token)
 
         def on_completed():
-            nonlocal isComplete
-            isComplete = True
+            nonlocal is_complete
+            is_complete = True
 
         mock_listener = Mock(spec=Observable)
         mock_listener.on_next = on_next
@@ -113,7 +113,7 @@ class TestTokenManager:
         mgr.stop()
 
         assert len(tokens) == 2
-        assert isComplete is True
+        assert is_complete is True
 
 
     def test_failed_token_renewal_with_retry(self):
