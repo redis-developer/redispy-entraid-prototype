@@ -2,20 +2,53 @@ import threading
 import weakref
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from typing import Callable, Any
 
 from redisauth.idp import IdentityProviderInterface
-from redisauth.token import TokenInterface
 import logging
 
 
-class TokenListenerInterface(ABC):
+class Observable(ABC):
+    @property
     @abstractmethod
-    def on_token_renewed(self, token: TokenInterface):
+    def on_next(self) -> Callable[[Any], None]:
         pass
 
+    @property
     @abstractmethod
-    def on_error(self, exception: Exception):
+    def on_error(self) -> Callable[[Exception], None]:
         pass
+
+    @property
+    @abstractmethod
+    def on_completed(self) -> Callable[[], None]:
+        pass
+
+
+class TokenListener(Observable):
+    @property
+    def on_next(self) -> Callable[[Any], None]:
+        return self.on_next
+
+    @on_next.setter
+    def on_next(self, callback: Callable[[Any], None]) -> None:
+        self.on_next = callback
+
+    @property
+    def on_error(self) -> Callable[[Exception], None]:
+        return self.on_error
+
+    @on_error.setter
+    def on_error(self, callback: Callable[[Exception], None]) -> None:
+        self.on_error = callback
+
+    @property
+    def on_completed(self) -> Callable[[], None]:
+        return self.on_completed
+
+    @on_completed.setter
+    def on_completed(self, callback: Callable[[Any], None]) -> None:
+        self.on_completed = callback
 
 
 class RetryPolicy:
@@ -97,7 +130,7 @@ class TokenManager:
         logging.debug("Disposed the TokenManager")
         self.stop()
 
-    def start(self, listener: TokenListenerInterface, block_for_initial: bool = True):
+    def start(self, listener: Observable, block_for_initial: bool = True):
         self._listener = listener
 
         # Schedule initial task, that will run subsequent tasks with interval.
@@ -116,6 +149,8 @@ class TokenManager:
 
         if self._next_timer is not None:
             self._next_timer.cancel()
+
+        self._listener.on_completed()
 
     def _calculate_renewal_delay(self, expire_date: int, issue_date: int) -> int:
         ttl_for_lower_refresh = self._ttl_for_lower_refresh(expire_date)
@@ -145,7 +180,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
     try:
         token = mgr._idp.request_token()
         delay = mgr._calculate_renewal_delay(token.get_expires_at(), token.get_received_at())
-        mgr._listener.on_token_renewed(token)
+        mgr._listener.on_next(token)
         mgr._next_timer = threading.Timer(
             delay,
             _renew_token,
