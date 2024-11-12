@@ -115,6 +115,30 @@ class TestTokenManager:
         assert len(tokens) == 2
         assert is_complete is True
 
+    def test_no_token_renewal_on_process_complete(self):
+        tokens = []
+        mock_provider = Mock(spec=IdentityProviderInterface)
+        mock_provider.request_token.return_value = SimpleToken(
+            'value',
+            (datetime.now(timezone.utc).timestamp() / 1000) + 1,
+            (datetime.now(timezone.utc).timestamp() / 1000),
+            []
+        )
+
+        def on_next(token):
+            nonlocal tokens
+            tokens.append(token)
+
+        mock_listener = Mock(spec=Observable)
+        mock_listener.on_next = on_next
+
+        retry_policy = RetryPolicy(1, 10)
+        config = TokenManagerConfig(0.9, 0, 1000, retry_policy)
+        mgr = TokenManager(mock_provider, config)
+        mgr.start(mock_listener)
+        sleep(0.2)
+
+        assert len(tokens) == 1
 
     def test_failed_token_renewal_with_retry(self):
         tokens = []
