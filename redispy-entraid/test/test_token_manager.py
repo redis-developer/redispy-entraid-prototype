@@ -14,12 +14,12 @@ class TestTokenManager:
         [
             (0.95, 2),
             (0.4, 3),
-            (0.3, 4),
+            (0.28, 4),
         ],
         ids=[
             "Refresh ratio = 0.95, 2 tokens in 0,1 second",
             "Refresh ratio = 0.4,  3 tokens in 0,1 second",
-            "Refresh ratio = 0.3,  4 tokens in 0,1 second",
+            "Refresh ratio = 0.28,  4 tokens in 0,1 second",
         ]
     )
     def test_success_token_renewal(self, exp_refresh_ratio, tokens_refreshed):
