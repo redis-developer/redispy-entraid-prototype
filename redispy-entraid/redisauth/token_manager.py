@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Callable, Any
 
 from redisauth.idp import IdentityProviderInterface
+from redisauth.token import TokenInterface
 import logging
 
 
@@ -47,7 +48,7 @@ class TokenListener(Observable):
         return self.on_completed
 
     @on_completed.setter
-    def on_completed(self, callback: Callable[[Any], None]) -> None:
+    def on_completed(self, callback: Callable[[], None]) -> None:
         self.on_completed = callback
 
 
@@ -130,19 +131,26 @@ class TokenManager:
         logging.debug("Disposed the TokenManager")
         self.stop()
 
-    def start(self, listener: Observable, block_for_initial: bool = True):
+    def start(
+            self,
+            listener: Observable,
+            block_for_initial: bool = True,
+            initial_delay: float = 0,
+    ) -> Callable[[], None]:
         self._listener = listener
 
         # Schedule initial task, that will run subsequent tasks with interval.
         # Weakref is used to make sure that GC can stop child thread correctly.
         self._init_timer = threading.Timer(
-            0,
+            initial_delay,
             _renew_token(weakref.ref(self))
         )
         self._init_timer.start()
 
         if block_for_initial:
             self._init_timer.join()
+
+        return self.stop
 
     def stop(self):
         self._stop_event.set()
@@ -151,6 +159,9 @@ class TokenManager:
             self._next_timer.cancel()
 
         self._listener.on_completed()
+
+    def acquire_token(self) -> TokenInterface:
+        return self._idp.request_token()
 
     def _calculate_renewal_delay(self, expire_date: int, issue_date: int) -> int:
         ttl_for_lower_refresh = self._ttl_for_lower_refresh(expire_date)
@@ -178,7 +189,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         return None
 
     try:
-        token = mgr._idp.request_token()
+        token = mgr.acquire_token()
         delay = mgr._calculate_renewal_delay(token.get_expires_at(), token.get_received_at())
         mgr._listener.on_next(token)
         mgr._next_timer = threading.Timer(
