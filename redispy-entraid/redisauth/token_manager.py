@@ -1,32 +1,14 @@
 import threading
 import weakref
-from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Callable, Any
 
 from redisauth.idp import IdentityProviderInterface
-from redisauth.token import TokenInterface
+from redisauth.token import TokenInterface, TokenResponse
 import logging
 
 
-class Observable(ABC):
-    @property
-    @abstractmethod
-    def on_next(self) -> Callable[[Any], None]:
-        pass
-
-    @property
-    @abstractmethod
-    def on_error(self) -> Callable[[Exception], None]:
-        pass
-
-    @property
-    @abstractmethod
-    def on_completed(self) -> Callable[[], None]:
-        pass
-
-
-class TokenListener(Observable):
+class CredentialsListener:
     @property
     def on_next(self) -> Callable[[Any], None]:
         return self.on_next
@@ -42,14 +24,6 @@ class TokenListener(Observable):
     @on_error.setter
     def on_error(self, callback: Callable[[Exception], None]) -> None:
         self.on_error = callback
-
-    @property
-    def on_completed(self) -> Callable[[], None]:
-        return self.on_completed
-
-    @on_completed.setter
-    def on_completed(self, callback: Callable[[], None]) -> None:
-        self.on_completed = callback
 
 
 class RetryPolicy:
@@ -133,7 +107,7 @@ class TokenManager:
 
     def start(
             self,
-            listener: Observable,
+            listener: CredentialsListener,
             block_for_initial: bool = True,
             initial_delay: float = 0,
     ) -> Callable[[], None]:
@@ -158,10 +132,8 @@ class TokenManager:
         if self._next_timer is not None:
             self._next_timer.cancel()
 
-        self._listener.on_completed()
-
     def acquire_token(self) -> TokenInterface:
-        return self._idp.request_token()
+        return TokenResponse(self._idp.request_token())
 
     def _calculate_renewal_delay(self, expire_date: int, issue_date: int) -> int:
         ttl_for_lower_refresh = self._ttl_for_lower_refresh(expire_date)
@@ -189,16 +161,19 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         return None
 
     try:
-        token = mgr.acquire_token()
-        delay = mgr._calculate_renewal_delay(token.get_expires_at(), token.get_received_at())
-        mgr._listener.on_next(token)
+        token_res = mgr.acquire_token()
+        delay = mgr._calculate_renewal_delay(
+            token_res.get_token().get_expires_at(),
+            token_res.get_token().get_received_at()
+        )
+        mgr._listener.on_next(token_res)
         mgr._next_timer = threading.Timer(
             delay,
             _renew_token,
             args=(mgr_ref,)
         )
         mgr._next_timer.start()
-        return token
+        return token_res
     except Exception as e:
         if mgr._retries < mgr._config.get_retry_policy().get_max_attempts():
             mgr._retries += 1

@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 
-import jwt
-from datetime import datetime, timedelta
-from redisauth.token import SimpleToken, JWToken
-from redisauth.err import ErrNotAuthenticated
-
 '''
 This interface is the facade of an identity provider
 '''
+
+
+class IdentityProviderConfigInterface(ABC):
+    @abstractmethod
+    def get_credentials(self) -> dict:
+        pass
 
 
 class IdentityProviderInterface(ABC):
@@ -19,8 +20,6 @@ class IdentityProviderInterface(ABC):
     def request_token(self):
         pass
 
-
-class IdentityProviderConfigInterface(ABC):
     @abstractmethod
-    def get_provider(self) -> IdentityProviderInterface:
+    def get_config(self) -> IdentityProviderConfigInterface:
         pass
