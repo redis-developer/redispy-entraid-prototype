@@ -2,7 +2,7 @@ from pycparser.ply.yacc import token
 from redis import Redis
 
 from .token import Token
-from .tokenmgr import TokenManager, TokenExpiryListener
+from .token_manager import TokenManager, TokenExpiryListener
 
 '''
 The connection manager is responsible for reauthenticating the connections when tokens need to be

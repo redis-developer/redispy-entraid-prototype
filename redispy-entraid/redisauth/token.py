@@ -3,15 +3,6 @@ from abc import ABC, abstractmethod
 import jwt
 from datetime import datetime, timezone
 
-'''
-A token has a 
-
-- An decoded value
-- An expected date/time of expiration
-- A method that allows calculating its time to live
-
-'''
-
 
 class TokenInterface(ABC):
     @abstractmethod
@@ -37,6 +28,17 @@ class TokenInterface(ABC):
     @abstractmethod
     def get_received_at(self) -> int:
         pass
+
+
+class TokenResponse:
+    def __init__(self, token: TokenInterface):
+        self._token = token
+
+    def get_token(self) -> TokenInterface:
+        return self._token
+
+    def get_ttl_ms(self) -> int:
+        return self._token.get_expires_at() - self._token.get_received_at()
 
 
 class SimpleToken(TokenInterface):
