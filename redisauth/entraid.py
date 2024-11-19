@@ -129,7 +129,7 @@ class EntraIdCredentialsProvider(StreamingCredentialProvider):
 
     def on_next(self, callback: Callable[[Any], None]):
         self._listener = CredentialsListener()
-        self._listener.on_next(callback)
+        self._listener.on_next = callback
 
     def is_streaming(self) -> bool:
         return self._is_streaming

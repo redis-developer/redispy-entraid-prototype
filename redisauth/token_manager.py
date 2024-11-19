@@ -136,7 +136,7 @@ class TokenManager:
         if self._next_timer is not None:
             self._next_timer.cancel()
 
-    def acquire_token(self) -> TokenInterface:
+    def acquire_token(self) -> TokenResponse:
         return TokenResponse(self._idp.request_token())
 
     def _calculate_renewal_delay(self, expire_date: int, issue_date: int) -> int:
