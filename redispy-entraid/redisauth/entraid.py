@@ -1,14 +1,14 @@
 from typing import Union, Tuple, Callable, Any
 
-from redis import CredentialProvider
+from redis.credentials import StreamingCredentialProvider
 from redisauth.token_manager import TokenManager, CredentialsListener
 
 
-class EntraIdCredentialsProvider(CredentialProvider):
+class EntraIdCredentialsProvider(StreamingCredentialProvider):
     def __init__(self, token_mgr: TokenManager):
         self._token_mgr = token_mgr
         self._listener = None
-        self._is_listening = False
+        self._is_streaming = False
 
     def get_credentials(self) -> Union[Tuple[str], Tuple[str, str]]:
         if self._listener is None:
@@ -16,20 +16,20 @@ class EntraIdCredentialsProvider(CredentialProvider):
 
         init_token = self._token_mgr.acquire_token()
 
-        if self._is_listening is False:
+        if self._is_streaming is False:
             self._token_mgr.start(
                 self._listener
             )
-            self._is_listening = True
+            self._is_streaming = True
 
         return (init_token.get_token().get_value(),)
 
-    def on_next_callback(self, callback: Callable[[Any], None]):
+    def on_next(self, callback: Callable[[Any], None]):
         self._listener = CredentialsListener()
         self._listener.on_next(callback)
 
-    def is_listening(self) -> bool:
-        return self._is_listening
+    def is_streaming(self) -> bool:
+        return self._is_streaming
 
 
 
