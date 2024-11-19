@@ -1,4 +1,4 @@
-from typing import Union, Tuple
+from typing import Union, Tuple, Callable, Any
 
 from redis import CredentialProvider
 from redisauth.token_manager import TokenManager, CredentialsListener
@@ -24,8 +24,9 @@ class EntraIdCredentialsProvider(CredentialProvider):
 
         return (init_token.get_token().get_value(),)
 
-    def set_listener(self, listener: CredentialsListener):
-        self._listener = listener
+    def on_next_callback(self, callback: Callable[[Any], None]):
+        self._listener = CredentialsListener()
+        self._listener.on_next(callback)
 
     def is_listening(self) -> bool:
         return self._is_listening
