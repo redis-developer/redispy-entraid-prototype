@@ -2,13 +2,13 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="redispy-entraid-prototype",
+    name="redispyauth-prototype",
     version="0.0.1",
     description="Extension library for additional authentication capabilities via Redis-py client.",
     packages=find_packages(
         include=[
-            "redispy-entraid",
-            "redispy-entraid.redisauth",
+            "redispyauth",
+            "redispyauth.redisauth",
         ],
         exclude=["tests", ".github"]
     ),
