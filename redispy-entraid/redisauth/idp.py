@@ -1,14 +1,11 @@
 from abc import ABC, abstractmethod
 
+from msal import ConfidentialClientApplication
+from redisauth.token import TokenInterface, JWToken
+
 '''
 This interface is the facade of an identity provider
 '''
-
-
-class IdentityProviderConfigInterface(ABC):
-    @abstractmethod
-    def get_credentials(self) -> dict:
-        pass
 
 
 class IdentityProviderInterface(ABC):
@@ -17,9 +14,16 @@ class IdentityProviderInterface(ABC):
     """
 
     @abstractmethod
-    def request_token(self):
+    def request_token(self) -> TokenInterface:
         pass
 
-    @abstractmethod
-    def get_config(self) -> IdentityProviderConfigInterface:
-        pass
+
+class EntraIDIdentityProvider(IdentityProviderInterface):
+    def __init__(self, scopes : list = [], **kwargs):
+        self._app = ConfidentialClientApplication(**kwargs)
+        self._scopes = scopes
+
+    def request_token(self) -> TokenInterface:
+        return JWToken(
+            self._app.acquire_token_for_client(self._scopes)["access_token"]
+        )

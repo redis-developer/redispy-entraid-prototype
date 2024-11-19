@@ -1,115 +1,34 @@
-from redisauth.idp import IdentityProviderInterface
-from redisauth.err import  ErrNotAuthenticated, ErrCantReceiveToken
-from redisauth.token import JWToken
-from enum import Enum
-from msal import ConfidentialClientApplication
-import logging
+from typing import Union, Tuple
 
-'''
-The authentication methods that are supported by our identity provider implementation
-'''
-class AuthMethods(Enum):
-    SERVICE_PRINCIPAL = 1
-
-'''
-A credentials dictionary which is prefilled with some common EntraId properties
-'''
-class EntraIdCreds(dict):
-    def __init__(self):
-        super().__init__()
-        self["authority_url"] = "https://login.microsoftonline.com"
-        self["scope"] = "https://redis.azure.com/.default"
+from redis import CredentialProvider
+from redisauth.token_manager import TokenManager, CredentialsListener
 
 
-'''
-An EntraID token is a JWT token, whereby it has an 'iat` meta data property that tells us when the token was issued.
-We can use this information to leverage a threshold (percentage of the maximum time to live), 
-to proactively recognize the token as being expired.
-'''
-class EntraIdToken(JWToken):
-    def __init__(self, value, thr=0.25):
-        super().__init__(value)
-        self.thr = thr
-        self.received_at = self.meta["iat"]
-        self.ttl_max = self.expires_at - self.received_at
+class EntraIdCredentialsProvider(CredentialProvider):
+    def __init__(self, token_mgr: TokenManager):
+        self._token_mgr = token_mgr
+        self._listener = None
+        self._is_listening = False
 
-    '''
-    This method overrides the standard behaviour of 'is_expired'. We assume that the token is expired before 
-    we hit the actual expiration time if the token reached 25% (default value) of its maximum time to live.
-    '''
-    def is_expired(self) -> bool:
-        return self.ttl() / self.ttl_max <= self.thr
+    def get_credentials(self) -> Union[Tuple[str], Tuple[str, str]]:
+        if self._listener is None:
+            raise Exception('To obtain the credentials the listener must be set first')
 
-'''
-The EntraId identity provider. 
- 
-An implementation of the IdentityProviderInterface needs to do the following: 
+        init_token = self._token_mgr.acquire_token()
 
-1. Construct the dictionary of credentials
-2. Pass it to the super constructor
-3. Override the 'authenticate' method
-'''
-class EntraIdIdentiyProvider(IdentityProviderInterface):
-    def __init__(self, tenant_id, client_id, client_secret, scope=None):
-        creds = EntraIdCreds()
-        creds["type"] = AuthMethods.SERVICE_PRINCIPAL.name
-        creds["tenant_id"]  = tenant_id
-        creds["client_id"] = client_id
-        creds["client_secret"] = client_secret
+        if self._is_listening is False:
+            self._token_mgr.start(
+                self._listener
+            )
+            self._is_listening = True
 
-        '''
-        Override the scope if it was passed over. It's required that the scope is configurable, whereby
-        the Redis scope is normally https://redis.azure.com/.default.
-        '''
-        if scope:
-            creds["scope"] = scope
+        return (init_token.get_token().get_value(),)
 
+    def set_listener(self, listener: CredentialsListener):
+        self._listener = listener
 
-        self.app = None
-
-        # Calls authenticate
-        super().__init__(creds)
-
-    '''
-    Authenticate by using the Microsoft authentication library
-    '''
-    def authenticate(self, creds) -> bool:
-        success = False
-
-        if creds.get("type") == AuthMethods.SERVICE_PRINCIPAL.name:
-            # Authenticate via a service principal / client application
-            try:
-                self.app = ConfidentialClientApplication(creds.get("client_id"),
-                                                         creds.get("client_secret"),
-                                                         "{}/{}".format(creds.get("authority_url"),
-                                                                        creds.get("tenant_id"))
-                                                         )
-
-                # Let's assume that the authentication was successful if we can acquire a token
-                scopes = [ creds.get("scope") ]
-                token_dict = self.app.acquire_token_for_client(scopes)
-                if "access_token" in token_dict:
-                    success = True
-            except Exception as e:
-                logging.error(e)
-
-        self.is_authenticated = success
-        return success
-
-
-    '''
-    Receive a token from EntraId
-    '''
-    def request_token(self):
-        if not self.is_authenticated:
-            raise ErrNotAuthenticated()
-        try:
-            scopes = [EntraIdCreds().get("scope")]
-            token_value = self.app.acquire_token_for_client(scopes)["access_token"]
-            return EntraIdToken(token_value)
-        except Exception as e:
-            logging.error(e)
-            raise ErrCantReceiveToken()
+    def is_listening(self) -> bool:
+        return self._is_listening
 
 
 
