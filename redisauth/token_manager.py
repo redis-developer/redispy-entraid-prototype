@@ -188,5 +188,8 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             )
             mgr._next_timer.start()
         else:
-            mgr._listener.on_error(e)
+            if mgr._listener.on_error is not None:
+                mgr._listener.on_error(e)
+
+            raise e
 
