@@ -170,6 +170,9 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             token_res.get_token().get_expires_at(),
             token_res.get_token().get_received_at()
         )
+        if not mgr._listener.on_next.alive:
+            return token_res
+
         mgr._listener.on_next()(token_res.get_token().get_value())
         mgr._next_timer = threading.Timer(
             delay,
