@@ -106,7 +106,7 @@ class EntraIdCredentialsProvider(StreamingCredentialProvider):
         self._token_mgr = TokenManager(
             EntraIDIdentityProvider(
                 config.get_identity_provider_config().get('scopes'),
-                config.get_identity_provider_config().get('config')
+                **config.get_identity_provider_config().get('config')
             ),
             config.get_token_manager_config()
         )

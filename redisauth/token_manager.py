@@ -9,21 +9,25 @@ import logging
 
 
 class CredentialsListener:
+    def __init__(self):
+        self._on_next = None
+        self._on_error = None
+
     @property
     def on_next(self) -> Callable[[Any], None]:
-        return self.on_next
+        return self._on_next
 
     @on_next.setter
     def on_next(self, callback: Callable[[Any], None]) -> None:
-        self.on_next = callback
+        self._on_next = callback
 
     @property
     def on_error(self) -> Callable[[Exception], None]:
-        return self.on_error
+        return self._on_error
 
     @on_error.setter
     def on_error(self, callback: Callable[[Exception], None]) -> None:
-        self.on_error = callback
+        self._on_error = callback
 
 
 class RetryPolicy:
