@@ -170,10 +170,14 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             token_res.get_token().get_expires_at(),
             token_res.get_token().get_received_at()
         )
-        if not mgr._listener.on_next.alive:
+
+        on_next = mgr._listener.on_next()
+
+        # If reference was already cleared by GC, return current token.
+        if on_next is None:
             return token_res
 
-        mgr._listener.on_next()(token_res.get_token().get_value())
+        on_next(token_res.get_token().get_value())
         mgr._next_timer = threading.Timer(
             delay,
             _renew_token,
@@ -191,8 +195,10 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             )
             mgr._next_timer.start()
         else:
-            if mgr._listener.on_error is not None:
-                mgr._listener.on_error(e)
+            on_error = mgr._listener.on_error()
 
-            raise e
+            if on_error is None:
+                raise e
+
+            on_error(e)
 
