@@ -1,4 +1,3 @@
-from pycparser.ply.yacc import token
 from redis import Redis
 
 from .token import Token

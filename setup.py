@@ -7,8 +7,7 @@ setup(
     description="Extension library for additional authentication capabilities via Redis-py client.",
     packages=find_packages(
         include=[
-            "redispyauth",
-            "redispyauth.redisauth",
+            "redisauth",
         ],
         exclude=["tests", ".github"]
     ),
