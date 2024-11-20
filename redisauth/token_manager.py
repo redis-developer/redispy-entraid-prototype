@@ -121,7 +121,8 @@ class TokenManager:
         # Weakref is used to make sure that GC can stop child thread correctly.
         self._init_timer = threading.Timer(
             initial_delay,
-            _renew_token(weakref.ref(self))
+            _renew_token,
+            args=[weakref.ref(self)]
         )
         self._init_timer.start()
 
