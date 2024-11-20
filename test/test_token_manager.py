@@ -1,3 +1,4 @@
+import weakref
 from datetime import datetime, timezone
 from time import sleep
 from unittest.mock import Mock
@@ -42,7 +43,7 @@ class TestTokenManager:
             tokens.append(token)
 
         mock_listener = Mock(spec=CredentialsListener)
-        mock_listener.on_next = on_next
+        mock_listener.on_next = weakref.ref(on_next)
 
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(exp_refresh_ratio, 0, 1000, retry_policy)
@@ -71,7 +72,7 @@ class TestTokenManager:
             tokens.append(token)
 
         mock_listener = Mock(spec=CredentialsListener)
-        mock_listener.on_next = on_next
+        mock_listener.on_next = weakref.ref(on_next)
 
         retry_policy = RetryPolicy(3, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
@@ -97,7 +98,7 @@ class TestTokenManager:
             tokens.append(token)
 
         mock_listener = Mock(spec=CredentialsListener)
-        mock_listener.on_next = on_next
+        mock_listener.on_next = weakref.ref(on_next)
 
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(0.9, 0, 1000, retry_policy)
@@ -127,8 +128,8 @@ class TestTokenManager:
             exceptions.append(exception)
 
         mock_listener = Mock(spec=CredentialsListener)
-        mock_listener.on_next = on_next
-        mock_listener.on_error = on_error
+        mock_listener.on_next = weakref.ref(on_next)
+        mock_listener.on_error = weakref.ref(on_error)
 
         retry_policy = RetryPolicy(3, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
