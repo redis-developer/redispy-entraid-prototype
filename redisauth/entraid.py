@@ -125,7 +125,7 @@ class EntraIdCredentialsProvider(StreamingCredentialProvider):
             )
             self._is_streaming = True
 
-        return (init_token.get_token().get_value(),)
+        return init_token.get_token().try_get('oid'), init_token.get_token().get_value()
 
     def on_next(self, callback: Callable[[Any], None]):
         self._listener = CredentialsListener()

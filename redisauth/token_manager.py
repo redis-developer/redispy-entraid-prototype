@@ -14,20 +14,20 @@ class CredentialsListener:
         self._on_error = None
 
     @property
-    def on_next(self) -> weakref.ref[Callable[[Any], None]]:
+    def on_next(self) -> weakref.WeakMethod[Callable[[Any], None]]:
         return self._on_next
 
     @on_next.setter
     def on_next(self, callback: Callable[[Any], None]) -> None:
-        self._on_next = weakref.ref(callback)
+        self._on_next = weakref.WeakMethod(callback)
 
     @property
-    def on_error(self) -> weakref.ref[Callable[[Exception], None]]:
+    def on_error(self) -> weakref.WeakMethod[Callable[[Exception], None]]:
         return self._on_error
 
     @on_error.setter
     def on_error(self, callback: Callable[[Exception], None]) -> None:
-        self._on_error = weakref.ref(callback)
+        self._on_error = weakref.WeakMethod(callback)
 
 
 class RetryPolicy:
@@ -178,7 +178,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         if on_next is None:
             return token_res
 
-        on_next(token_res.get_token().get_value())
+        on_next(token_res.get_token().try_get('oid'), token_res.get_token().get_value())
         mgr._next_timer = threading.Timer(
             delay,
             _renew_token,
