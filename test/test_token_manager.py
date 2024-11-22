@@ -35,10 +35,10 @@ class TestTokenManager:
             'value',
             (datetime.now(timezone.utc).timestamp() / 1000) + 0.1,
             (datetime.now(timezone.utc).timestamp() / 1000),
-            []
+            {"oid": 'test'}
         )
 
-        def on_next(token):
+        def on_next(username, token):
             nonlocal tokens
             tokens.append(token)
 
@@ -63,11 +63,11 @@ class TestTokenManager:
                 'value',
                 (datetime.now(timezone.utc).timestamp() / 1000) + 0.1,
                 (datetime.now(timezone.utc).timestamp() / 1000),
-                []
+                {"oid": 'test'}
             )
         ]
 
-        def on_next(token):
+        def on_next(username, token):
             nonlocal tokens
             tokens.append(token)
 
@@ -90,10 +90,10 @@ class TestTokenManager:
             'value',
             (datetime.now(timezone.utc).timestamp() / 1000) + 1,
             (datetime.now(timezone.utc).timestamp() / 1000),
-            []
+            {"oid": 'test'}
         )
 
-        def on_next(token):
+        def on_next(username, token):
             nonlocal tokens
             tokens.append(token)
 
@@ -119,7 +119,7 @@ class TestTokenManager:
             Exception
         ]
 
-        def on_next(token):
+        def on_next(username, token):
             nonlocal tokens
             tokens.append(token)
 

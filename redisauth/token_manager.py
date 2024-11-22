@@ -124,6 +124,7 @@ class TokenManager:
             _renew_token,
             args=[weakref.ref(self)]
         )
+        self._init_timer.daemon = True
         self._init_timer.start()
 
         if block_for_initial:
@@ -182,6 +183,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             _renew_token,
             args=(mgr_ref,)
         )
+        mgr._next_timer.daemon = True
         mgr._next_timer.start()
         return token_res
     except Exception as e:
@@ -192,12 +194,11 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
                 _renew_token,
                 args=(mgr_ref,)
             )
+            mgr._next_timer.daemon = True
             mgr._next_timer.start()
         else:
             if mgr._listener.on_error is None or mgr._listener.on_error() is None:
-                mgr.stop()
                 raise e
 
-            mgr.stop()
             mgr._listener.on_error()(e)
 
