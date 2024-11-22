@@ -3,6 +3,7 @@ import weakref
 from datetime import datetime, timezone
 from typing import Callable, Any
 
+from redisauth.err import RequestTokenErr
 from redisauth.idp import IdentityProviderInterface
 from redisauth.token import TokenInterface, TokenResponse
 import logging
@@ -186,7 +187,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         mgr._next_timer.daemon = True
         mgr._next_timer.start()
         return token_res
-    except Exception as e:
+    except RequestTokenErr as e:
         if mgr._retries < mgr._config.get_retry_policy().get_max_attempts():
             mgr._retries += 1
             mgr._next_timer = threading.Timer(

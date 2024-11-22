@@ -4,6 +4,8 @@ from time import sleep
 from unittest.mock import Mock
 
 import pytest
+
+from redisauth.err import RequestTokenErr
 from redisauth.idp import IdentityProviderInterface
 from redisauth.token_manager import (
     CredentialsListener,
@@ -57,8 +59,8 @@ class TestTokenManager:
         tokens = []
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.side_effect = [
-            Exception,
-            Exception,
+            RequestTokenErr,
+            RequestTokenErr,
             SimpleToken(
                 'value',
                 (datetime.now(timezone.utc).timestamp() / 1000) + 0.1,
@@ -114,9 +116,10 @@ class TestTokenManager:
 
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.side_effect = [
-            Exception,
-            Exception,
-            Exception
+            RequestTokenErr,
+            RequestTokenErr,
+            RequestTokenErr,
+            RequestTokenErr,
         ]
 
         def on_next(username, token):

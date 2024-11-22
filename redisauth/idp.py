@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 
 from msal import ConfidentialClientApplication
+
+from redisauth.err import RequestTokenErr
 from redisauth.token import TokenInterface, JWToken
 
 '''
@@ -24,6 +26,9 @@ class EntraIDIdentityProvider(IdentityProviderInterface):
         self._scopes = scopes
 
     def request_token(self) -> TokenInterface:
-        return JWToken(
-            self._app.acquire_token_for_client(self._scopes)["access_token"]
-        )
+        try:
+            return JWToken(
+                self._app.acquire_token_for_client(self._scopes)["access_token"]
+            )
+        except Exception as e:
+            raise RequestTokenErr(e)
