@@ -5,7 +5,7 @@ from typing import Callable, Any
 
 from redisauth.err import RequestTokenErr
 from redisauth.idp import IdentityProviderInterface
-from redisauth.token import TokenInterface, TokenResponse
+from redisauth.token import TokenResponse
 import logging
 
 
@@ -32,14 +32,24 @@ class CredentialsListener:
 
 
 class RetryPolicy:
-    def __init__(self, max_attempts: int, delay_in_ms: int):
+    def __init__(self, max_attempts: int, delay_in_ms: float):
         self.max_attempts = max_attempts
         self.delay_in_ms = delay_in_ms
 
     def get_max_attempts(self) -> int:
+        """
+        Retry attempts before exception will be thrown.
+
+        :return: int
+        """
         return self.max_attempts
 
-    def get_delay_in_ms(self) -> int:
+    def get_delay_in_ms(self) -> float:
+        """
+        Delay between retries in seconds.
+
+        :return: int
+        """
         return self.delay_in_ms
 
 
@@ -114,16 +124,16 @@ class TokenManager:
             self,
             listener: CredentialsListener,
             block_for_initial: bool = True,
-            initial_delay: float = 0,
+            initial_delay_in_ms: float = 0,
     ) -> Callable[[], None]:
         self._listener = listener
 
         # Schedule initial task, that will run subsequent tasks with interval.
         # Weakref is used to make sure that GC can stop child thread correctly.
         self._init_timer = threading.Timer(
-            initial_delay,
+            initial_delay_in_ms,
             _renew_token,
-            args=[weakref.ref(self)]
+            args=(weakref.ref(self),)
         )
         self._init_timer.daemon = True
         self._init_timer.start()
@@ -142,21 +152,20 @@ class TokenManager:
     def acquire_token(self) -> TokenResponse:
         return TokenResponse(self._idp.request_token())
 
-    def _calculate_renewal_delay(self, expire_date: int, issue_date: int) -> int:
-        ttl_for_lower_refresh = self._ttl_for_lower_refresh(expire_date)
-        ttl_for_ratio_refresh = self._ttl_for_ratio_refresh(expire_date, issue_date)
-        delay = min(ttl_for_ratio_refresh, ttl_for_lower_refresh)
+    def _calculate_renewal_delay(self, expire_date: float, issue_date: float) -> float:
+        delay_for_lower_refresh = self._delay_for_lower_refresh(expire_date)
+        delay_for_ratio_refresh = self._delay_for_ratio_refresh(expire_date, issue_date)
+        delay = min(delay_for_ratio_refresh, delay_for_lower_refresh)
 
-        return 0 if delay < 0 else delay
+        return 0 if delay < 0 else delay / 1000
 
-    def _ttl_for_lower_refresh(self, expire_date: int):
-        return expire_date - (datetime.now(timezone.utc).timestamp() / 1000)
+    def _delay_for_lower_refresh(self, expire_date: float):
+        return (expire_date - self._config.get_lower_refresh_bound_millis() -
+                (datetime.now(timezone.utc).timestamp() * 1000))
 
-    def _ttl_for_ratio_refresh(self, expire_date: int, issue_date: int):
-        valid_duration = expire_date - issue_date
-        refresh_before = valid_duration - (valid_duration * self._config.get_expiration_refresh_ratio())
-
-        return expire_date - refresh_before - (datetime.now(timezone.utc).timestamp() / 1000)
+    def _delay_for_ratio_refresh(self, expire_date: float, issue_date: float):
+        token_ttl = expire_date - issue_date
+        return token_ttl * self._config.get_expiration_refresh_ratio()
 
 
 # To make sure that GC isn't blocked by strong references to TokenManager object,
@@ -170,15 +179,20 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
     try:
         token_res = mgr.acquire_token()
         delay = mgr._calculate_renewal_delay(
-            token_res.get_token().get_expires_at(),
-            token_res.get_token().get_received_at()
+            token_res.get_token().get_expires_at_ms(),
+            token_res.get_token().get_received_at_ms()
         )
 
         # If reference was already cleared by GC, return current token.
         if mgr._listener.on_next is None or mgr._listener.on_next() is None:
             return token_res
 
-        mgr._listener.on_next()(token_res.get_token().try_get('oid'), token_res.get_token().get_value())
+        if not token_res.get_token().is_expired():
+            mgr._listener.on_next()(token_res.get_token())
+
+        if delay <= 0:
+            return token_res
+
         mgr._next_timer = threading.Timer(
             delay,
             _renew_token,

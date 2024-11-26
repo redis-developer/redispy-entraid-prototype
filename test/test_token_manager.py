@@ -35,12 +35,12 @@ class TestTokenManager:
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.return_value = SimpleToken(
             'value',
-            (datetime.now(timezone.utc).timestamp() / 1000) + 0.1,
-            (datetime.now(timezone.utc).timestamp() / 1000),
+            (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+            (datetime.now(timezone.utc).timestamp() * 1000),
             {"oid": 'test'}
         )
 
-        def on_next(username, token):
+        def on_next(token):
             nonlocal tokens
             tokens.append(token)
 
@@ -63,13 +63,13 @@ class TestTokenManager:
             RequestTokenErr,
             SimpleToken(
                 'value',
-                (datetime.now(timezone.utc).timestamp() / 1000) + 0.1,
-                (datetime.now(timezone.utc).timestamp() / 1000),
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+                (datetime.now(timezone.utc).timestamp() * 1000),
                 {"oid": 'test'}
             )
         ]
 
-        def on_next(username, token):
+        def on_next(token):
             nonlocal tokens
             tokens.append(token)
 
@@ -80,7 +80,8 @@ class TestTokenManager:
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
         mgr.start(mock_listener)
-        sleep(0.1)
+        # Should be less than a 0.1, or it will be flacky due to additional token renewal.
+        sleep(0.08)
 
         assert mock_provider.request_token.call_count == 3
         assert len(tokens) == 1
@@ -90,12 +91,12 @@ class TestTokenManager:
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.return_value = SimpleToken(
             'value',
-            (datetime.now(timezone.utc).timestamp() / 1000) + 1,
-            (datetime.now(timezone.utc).timestamp() / 1000),
+            (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
+            (datetime.now(timezone.utc).timestamp() * 1000),
             {"oid": 'test'}
         )
 
-        def on_next(username, token):
+        def on_next(token):
             nonlocal tokens
             tokens.append(token)
 
@@ -122,7 +123,7 @@ class TestTokenManager:
             RequestTokenErr,
         ]
 
-        def on_next(username, token):
+        def on_next(token):
             nonlocal tokens
             tokens.append(token)
 
