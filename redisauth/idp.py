@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from redisauth.token import TokenInterface
 
-'''
+"""
 This interface is the facade of an identity provider
-'''
+"""
 
 
 class IdentityProviderInterface(ABC):
