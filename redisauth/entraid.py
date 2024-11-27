@@ -110,7 +110,7 @@ class EntraIdCredentialsProvider(StreamingCredentialProvider):
             ),
             config.get_token_manager_config()
         )
-        self._listener = None
+        self._listener = CredentialsListener()
         self._is_streaming = False
 
     def get_credentials(self) -> Union[Tuple[str], Tuple[str, str]]:
@@ -128,8 +128,10 @@ class EntraIdCredentialsProvider(StreamingCredentialProvider):
         return init_token.get_token().try_get('oid'), init_token.get_token().get_value()
 
     def on_next(self, callback: Callable[[Any], None]):
-        self._listener = CredentialsListener()
         self._listener.on_next = callback
+
+    def on_error(self, callback: Callable[[Exception], None]):
+        self._listener.on_error = callback
 
     def is_streaming(self) -> bool:
         return self._is_streaming
