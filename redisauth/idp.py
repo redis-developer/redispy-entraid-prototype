@@ -14,3 +14,12 @@ class IdentityProviderInterface(ABC):
     @abstractmethod
     def request_token(self) -> TokenInterface:
         pass
+
+
+class IdentityProviderConfigInterface(ABC):
+    """
+    Configuration class that provides a configured identity provider.
+    """
+    @abstractmethod
+    def get_provider(self) -> IdentityProviderInterface:
+        pass
