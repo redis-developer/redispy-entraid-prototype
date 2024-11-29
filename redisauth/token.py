@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 import jwt
 from datetime import datetime, timezone
 
+from redisauth.err import InvalidTokenSchemaErr
+
 
 class TokenInterface(ABC):
     @abstractmethod
@@ -74,6 +76,9 @@ class SimpleToken(TokenInterface):
 
 
 class JWToken(TokenInterface):
+
+    REQUIRED_FIELDS = {'exp', 'iat'}
+
     def __init__(self, token: str):
         self._value = token
         self._decoded = jwt.decode(
@@ -81,6 +86,7 @@ class JWToken(TokenInterface):
             options={"verify_signature": False},
             algorithms=[jwt.get_unverified_header(self._value).get('alg')]
         )
+        self._validate_token()
 
     def is_expired(self) -> bool:
         exp = self._decoded['exp']
@@ -107,3 +113,9 @@ class JWToken(TokenInterface):
 
     def get_received_at_ms(self) -> float:
         return float(self._decoded['iat'] * 1000)
+
+    def _validate_token(self):
+        actual_fields = {x for x in self._decoded.keys()}
+
+        if len(self.REQUIRED_FIELDS - actual_fields) != 0:
+            raise InvalidTokenSchemaErr(self.REQUIRED_FIELDS - actual_fields)

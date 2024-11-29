@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 import jwt
 import pytest
+
+from redisauth.err import InvalidTokenSchemaErr
 from redisauth.token import SimpleToken, JWToken
 
 
@@ -62,3 +64,13 @@ class TestToken:
         assert jwt_token.ttl() == -1
         assert jwt_token.is_expired() is False
         assert jwt_token.get_expires_at_ms() == -1000
+
+        with pytest.raises(
+                InvalidTokenSchemaErr,
+                match="Unexpected token schema. Following fields are missing: exp, iat"
+        ):
+            token = {
+                'key': "value"
+            }
+            encoded = jwt.encode(token, "secret", algorithm='HS256')
+            JWToken(encoded)
