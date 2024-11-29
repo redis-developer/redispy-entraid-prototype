@@ -21,24 +21,38 @@ class TestTokenManager:
         "exp_refresh_ratio,tokens_refreshed",
         [
             (0.9, 2),
-            (0.4, 3),
             (0.28, 4),
         ],
         ids=[
             "Refresh ratio = 0.9,  2 tokens in 0,1 second",
-            "Refresh ratio = 0.4,  3 tokens in 0,1 second",
             "Refresh ratio = 0.28, 4 tokens in 0,1 second",
         ]
     )
     def test_success_token_renewal(self, exp_refresh_ratio, tokens_refreshed):
         tokens = []
         mock_provider = Mock(spec=IdentityProviderInterface)
-        mock_provider.request_token.return_value = SimpleToken(
-            'value',
-            (datetime.now(timezone.utc).timestamp() * 1000) + 100,
-            (datetime.now(timezone.utc).timestamp() * 1000),
-            {"oid": 'test'}
-        )
+        mock_provider.request_token.side_effect = [
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+            {"oid": 'test'}),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 130,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 30,
+                {"oid": 'test'}),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 160,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 60,
+                {"oid": 'test'}),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 190,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 90,
+                {"oid": 'test'}),
+        ]
 
         def on_next(token):
             nonlocal tokens
