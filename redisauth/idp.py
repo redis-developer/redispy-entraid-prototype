@@ -12,7 +12,7 @@ class IdentityProviderInterface(ABC):
     """
 
     @abstractmethod
-    def request_token(self) -> TokenInterface:
+    def request_token(self, force_refresh=False) -> TokenInterface:
         pass
 
 
