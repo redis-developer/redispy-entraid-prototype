@@ -69,6 +69,42 @@ class TestTokenManager:
 
         assert len(tokens) == tokens_refreshed
 
+    @pytest.mark.parametrize(
+        "block_for_initial,tokens_acquired",
+        [
+            (True, 1),
+            (False, 0),
+        ],
+        ids=[
+            "Block for initial, callback will triggered once",
+            "Non blocked, callback wont be triggered",
+        ]
+    )
+    def test_request_token_blocking_behaviour(self, block_for_initial, tokens_acquired):
+        tokens = []
+        mock_provider = Mock(spec=IdentityProviderInterface)
+        mock_provider.request_token.return_value = SimpleToken(
+            'value',
+            (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+            (datetime.now(timezone.utc).timestamp() * 1000),
+            {"oid": 'test'}
+        )
+
+        def on_next(token):
+            nonlocal tokens
+            sleep(0.1)
+            tokens.append(token)
+
+        mock_listener = Mock(spec=CredentialsListener)
+        mock_listener.on_next = weakref.ref(on_next)
+
+        retry_policy = RetryPolicy(1, 10)
+        config = TokenManagerConfig(1, 0, 1000, retry_policy)
+        mgr = TokenManager(mock_provider, config)
+        mgr.start(mock_listener, block_for_initial=block_for_initial)
+
+        assert len(tokens) == tokens_acquired
+
     def test_success_token_renewal_with_retry(self):
         tokens = []
         mock_provider = Mock(spec=IdentityProviderInterface)
