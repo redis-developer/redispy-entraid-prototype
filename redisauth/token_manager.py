@@ -3,7 +3,7 @@ import weakref
 from datetime import datetime, timezone
 from typing import Callable, Any
 
-from redisauth.err import RequestTokenErr
+from redisauth.err import RequestTokenErr, TokenRenewalErr
 from redisauth.idp import IdentityProviderInterface
 from redisauth.token import TokenResponse
 import logging
@@ -185,12 +185,14 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             token_res.get_token().get_received_at_ms()
         )
 
+        if token_res.get_token().is_expired():
+            raise TokenRenewalErr("Requested token is expired")
+
         # If reference was already cleared by GC, return current token.
         if mgr._listener.on_next is None or mgr._listener.on_next() is None:
             return token_res
 
-        if not token_res.get_token().is_expired():
-            mgr._listener.on_next()(token_res.get_token())
+        mgr._listener.on_next()(token_res.get_token())
 
         if delay <= 0:
             return token_res
@@ -218,4 +220,8 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
                 raise e
 
             mgr._listener.on_error()(e)
+    except TokenRenewalErr as e:
+        if mgr._listener.on_error is None or mgr._listener.on_error() is None:
+            raise e
 
+        mgr._listener.on_error()(e)

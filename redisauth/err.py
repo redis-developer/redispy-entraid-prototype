@@ -17,3 +17,11 @@ class InvalidTokenSchemaErr(Exception):
         super().__init__(
             "Unexpected token schema. Following fields are missing: " + ", ".join(missing_fields)
         )
+
+
+class TokenRenewalErr(Exception):
+    """
+    Represents an exception during token renewal process.
+    """
+    def __init__(self, *args):
+        super().__init__(*args)

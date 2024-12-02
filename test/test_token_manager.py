@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from redisauth.err import RequestTokenErr
+from redisauth.err import RequestTokenErr, TokenRenewalErr
 from redisauth.idp import IdentityProviderInterface
 from redisauth.token_manager import (
     CredentialsListener,
@@ -194,3 +194,29 @@ class TestTokenManager:
         assert mock_provider.request_token.call_count == 4
         assert len(tokens) == 0
         assert len(exceptions) == 1
+
+    def test_failed_renewal_on_expired_token(self):
+        errors = []
+        mock_provider = Mock(spec=IdentityProviderInterface)
+        mock_provider.request_token.return_value = SimpleToken(
+            'value',
+            (datetime.now(timezone.utc).timestamp() * 1000) - 100,
+            (datetime.now(timezone.utc).timestamp() * 1000) - 1000,
+            {"oid": 'test'}
+        )
+
+        def on_error(error: TokenRenewalErr):
+            nonlocal errors
+            errors.append(error)
+
+        mock_listener = Mock(spec=CredentialsListener)
+        mock_listener.on_error = weakref.ref(on_error)
+
+        retry_policy = RetryPolicy(1, 10)
+        config = TokenManagerConfig(1, 0, 1000, retry_policy)
+        mgr = TokenManager(mock_provider, config)
+        mgr.start(mock_listener)
+
+        assert len(errors) == 1
+        assert isinstance(errors[0], TokenRenewalErr)
+        assert str(errors[0]) == "Requested token is expired"
