@@ -8,6 +8,8 @@ from redisauth.idp import IdentityProviderInterface
 from redisauth.token import TokenResponse
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 class CredentialsListener:
     def __init__(self):
@@ -117,7 +119,6 @@ class TokenManager:
         self._retries = 0
 
     def __del__(self):
-        logging.debug("Disposed the TokenManager")
         self.stop()
 
     def start(
@@ -192,7 +193,10 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         if mgr._listener.on_next is None or mgr._listener.on_next() is None:
             return token_res
 
-        mgr._listener.on_next()(token_res.get_token())
+        try:
+            mgr._listener.on_next()(token_res.get_token())
+        except Exception as e:
+            raise TokenRenewalErr(e)
 
         if delay <= 0:
             return token_res
