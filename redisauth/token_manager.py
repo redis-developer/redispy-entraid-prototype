@@ -1,7 +1,9 @@
 import threading
 import weakref
 from datetime import datetime, timezone
-from typing import Callable, Any
+from typing import Callable, Any, Awaitable, Coroutine
+
+import asyncio
 
 from redisauth.err import RequestTokenErr, TokenRenewalErr
 from redisauth.idp import IdentityProviderInterface
@@ -132,7 +134,7 @@ class TokenManager:
         # Schedule initial task, that will run subsequent tasks with interval.
         # Weakref is used to make sure that GC can stop child thread correctly.
         self._init_timer = threading.Timer(
-            initial_delay_in_ms,
+            initial_delay_in_ms / 1000,
             _renew_token,
             args=(weakref.ref(self),)
         )
@@ -144,11 +146,37 @@ class TokenManager:
 
         return self.stop
 
+    async def start_async(
+            self,
+            listener: CredentialsListener,
+            block_for_initial: bool = True,
+            initial_delay_in_ms: float = 0,
+    ) -> Callable[[], Coroutine[Any, Any, None]]:
+        self._listener = listener
+
+        # Schedule initial task, that will run subsequent tasks with interval.
+        # Weakref is used to make sure that GC can stop child thread correctly.
+        self._init_timer = threading.Timer(
+            initial_delay_in_ms / 1000,
+            _async_task_executor,
+            args=(weakref.ref(self),)
+        )
+        self._init_timer.daemon = True
+        self._init_timer.start()
+
+        if block_for_initial:
+            self._init_timer.join()
+
+        return self.stop_async
+
     def stop(self):
         self._stop_event.set()
 
         if self._next_timer is not None:
             self._next_timer.cancel()
+
+    async def stop_async(self):
+        return self.stop()
 
     def acquire_token(self, force_refresh=False) -> TokenResponse:
         return TokenResponse(self._idp.request_token(force_refresh))
@@ -174,6 +202,13 @@ class TokenManager:
 # To make sure that GC isn't blocked by strong references to TokenManager object,
 # we have to use weakref, so we can stop execution whenever main thread is finished.
 def _renew_token(mgr_ref: weakref.ref[TokenManager]):
+    """
+    Task to renew token from identity provider.
+    Schedules renewal tasks based on token TTL.
+
+    :param mgr_ref:
+    :return:
+    """
     mgr = mgr_ref()
 
     if mgr._stop_event.is_set():
@@ -229,3 +264,85 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
             raise e
 
         mgr._listener.on_error()(e)
+
+
+async def _renew_token_async(mgr_ref: weakref.ref[TokenManager]):
+    """
+    Async task to renew tokens from identity provider.
+    Schedules renewal tasks based on token TTL.
+
+    :param mgr_ref:
+    :return:
+    """
+    mgr = mgr_ref()
+
+    try:
+        token_res = mgr.acquire_token(force_refresh=True)
+        delay = mgr._calculate_renewal_delay(
+            token_res.get_token().get_expires_at_ms(),
+            token_res.get_token().get_received_at_ms()
+        )
+
+        if token_res.get_token().is_expired():
+            raise TokenRenewalErr("Requested token is expired")
+
+        # If reference was already cleared by GC, return current token.
+        if mgr._listener.on_next is None or mgr._listener.on_next() is None:
+            return token_res
+
+        try:
+            await mgr._listener.on_next()(token_res.get_token())
+        except Exception as e:
+            raise TokenRenewalErr(e)
+
+        if delay <= 0:
+            return token_res
+
+        mgr._next_timer = threading.Timer(
+            delay,
+            _async_task_executor,
+            args=(mgr_ref,)
+        )
+        mgr._next_timer.daemon = True
+        mgr._next_timer.start()
+        return token_res
+    except RequestTokenErr as e:
+        if mgr._retries < mgr._config.get_retry_policy().get_max_attempts():
+            mgr._retries += 1
+            mgr._next_timer = threading.Timer(
+                mgr._config.get_retry_policy().get_delay_in_ms() / 1000,
+                _async_task_executor,
+                args=(mgr_ref,)
+            )
+            mgr._next_timer.daemon = True
+            mgr._next_timer.start()
+        else:
+            if mgr._listener.on_error is None or mgr._listener.on_error() is None:
+                raise e
+
+            await mgr._listener.on_error()(e)
+    except TokenRenewalErr as e:
+        if mgr._listener.on_error is None or mgr._listener.on_error() is None:
+            raise e
+
+        await mgr._listener.on_error()(e)
+
+
+def _async_task_executor(mgr_ref: weakref.ref[TokenManager]):
+    """
+    Wrapper function that's passing to the Timer thread.
+    Creates event loop and executes task asynchronously.
+
+    :param mgr_ref:
+    :return:
+    """
+    mgr = mgr_ref()
+
+    if mgr._stop_event.is_set():
+        return None
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    loop.run_until_complete(_renew_token_async(mgr_ref))
+    loop.close()
