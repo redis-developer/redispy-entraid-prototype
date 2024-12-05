@@ -345,8 +345,10 @@ def _async_task_executor(mgr_ref: weakref.ref[TokenManager]):
     if mgr._stop_event.is_set():
         return None
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
     loop.run_until_complete(_renew_token_async(mgr_ref))
-    loop.close()
