@@ -1,7 +1,7 @@
 import threading
 import weakref
 from datetime import datetime, timezone
-from typing import Callable, Any, Awaitable, Coroutine
+from typing import Callable, Any, Awaitable, Coroutine, Union
 
 import asyncio
 
@@ -14,24 +14,28 @@ logger = logging.getLogger(__name__)
 
 
 class CredentialsListener:
+    """
+    Listeners that will be notified on events related to credentials.
+    Accepts callbacks and awaitable callbacks.
+    """
     def __init__(self):
         self._on_next = None
         self._on_error = None
 
     @property
-    def on_next(self) -> weakref.WeakMethod[Callable[[Any], None]]:
+    def on_next(self) -> Union[weakref.WeakMethod[Callable[[Any], None]], Awaitable]:
         return self._on_next
 
     @on_next.setter
-    def on_next(self, callback: Callable[[Any], None]) -> None:
+    def on_next(self, callback: Union[Callable[[Any], None], Awaitable]) -> None:
         self._on_next = weakref.WeakMethod(callback)
 
     @property
-    def on_error(self) -> weakref.WeakMethod[Callable[[Exception], None]]:
+    def on_error(self) -> Union[weakref.WeakMethod[Callable[[Exception], None]], Awaitable]:
         return self._on_error
 
     @on_error.setter
-    def on_error(self, callback: Callable[[Exception], None]) -> None:
+    def on_error(self, callback: Union[Callable[[Exception], None], Awaitable]) -> None:
         self._on_error = weakref.WeakMethod(callback)
 
 
