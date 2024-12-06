@@ -131,7 +131,7 @@ class TokenManager:
     def start(
             self,
             listener: CredentialsListener,
-            block_for_initial: bool = True,
+            block_for_initial: bool = False,
             initial_delay_in_ms: float = 0,
     ) -> Callable[[], None]:
         self._listener = listener
@@ -161,7 +161,7 @@ class TokenManager:
     async def start_async(
             self,
             listener: CredentialsListener,
-            block_for_initial: bool = True,
+            block_for_initial: bool = False,
             initial_delay_in_ms: float = 0,
     ) -> Callable[[], Coroutine[Any, Any, None]]:
         self._listener = listener
