@@ -1,6 +1,7 @@
 import threading
 import weakref
 from datetime import datetime, timezone
+from time import sleep
 from typing import Callable, Any, Awaitable, Coroutine, Union
 
 import asyncio
@@ -135,6 +136,13 @@ class TokenManager:
     ) -> Callable[[], None]:
         self._listener = listener
 
+        if initial_delay_in_ms <= 0:
+            token_res = self.acquire_token()
+            initial_delay_in_ms = self._calculate_renewal_delay(
+                token_res.get_token().get_expires_at_ms(),
+                token_res.get_token().get_received_at_ms()
+            )
+
         # Schedule initial task, that will run subsequent tasks with interval.
         # Weakref is used to make sure that GC can stop child thread correctly.
         self._init_timer = threading.Timer(
@@ -157,6 +165,13 @@ class TokenManager:
             initial_delay_in_ms: float = 0,
     ) -> Callable[[], Coroutine[Any, Any, None]]:
         self._listener = listener
+
+        if initial_delay_in_ms <= 0:
+            token_res = await self.acquire_token_async()
+            initial_delay_in_ms = self._calculate_renewal_delay(
+                token_res.get_token().get_expires_at_ms(),
+                token_res.get_token().get_received_at_ms()
+            )
 
         # Schedule initial task, that will run subsequent tasks with interval.
         # Weakref is used to make sure that GC can stop child thread correctly.
@@ -183,7 +198,32 @@ class TokenManager:
         return self.stop()
 
     def acquire_token(self, force_refresh=False) -> TokenResponse:
-        return TokenResponse(self._idp.request_token(force_refresh))
+        try:
+            token = self._idp.request_token(force_refresh)
+        except RequestTokenErr as e:
+            if self._retries < self._config.get_retry_policy().get_max_attempts():
+                self._retries += 1
+                sleep(self._config.get_retry_policy().get_delay_in_ms() / 1000)
+                return self.acquire_token(force_refresh)
+            else:
+                raise e
+
+        self._retries = 0
+        return TokenResponse(token)
+
+    async def acquire_token_async(self, force_refresh=False) -> TokenResponse:
+        try:
+            token = self._idp.request_token(force_refresh)
+        except RequestTokenErr as e:
+            if self._retries < self._config.get_retry_policy().get_max_attempts():
+                self._retries += 1
+                await asyncio.sleep(self._config.get_retry_policy().get_delay_in_ms() / 1000)
+                return await self.acquire_token_async(force_refresh)
+            else:
+                raise e
+
+        self._retries = 0
+        return TokenResponse(token)
 
     def _calculate_renewal_delay(self, expire_date: float, issue_date: float) -> float:
         delay_for_lower_refresh = self._delay_for_lower_refresh(expire_date)
@@ -248,22 +288,7 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         mgr._next_timer.daemon = True
         mgr._next_timer.start()
         return token_res
-    except RequestTokenErr as e:
-        if mgr._retries < mgr._config.get_retry_policy().get_max_attempts():
-            mgr._retries += 1
-            mgr._next_timer = threading.Timer(
-                mgr._config.get_retry_policy().get_delay_in_ms() / 1000,
-                _renew_token,
-                args=(mgr_ref,)
-            )
-            mgr._next_timer.daemon = True
-            mgr._next_timer.start()
-        else:
-            if mgr._listener.on_error is None or mgr._listener.on_error() is None:
-                raise e
-
-            mgr._listener.on_error()(e)
-    except TokenRenewalErr as e:
+    except Exception as e:
         if mgr._listener.on_error is None or mgr._listener.on_error() is None:
             raise e
 
@@ -281,7 +306,7 @@ async def _renew_token_async(mgr_ref: weakref.ref[TokenManager]):
     mgr = mgr_ref()
 
     try:
-        token_res = mgr.acquire_token(force_refresh=True)
+        token_res = await mgr.acquire_token_async(force_refresh=True)
         delay = mgr._calculate_renewal_delay(
             token_res.get_token().get_expires_at_ms(),
             token_res.get_token().get_received_at_ms()
@@ -310,22 +335,7 @@ async def _renew_token_async(mgr_ref: weakref.ref[TokenManager]):
         mgr._next_timer.daemon = True
         mgr._next_timer.start()
         return token_res
-    except RequestTokenErr as e:
-        if mgr._retries < mgr._config.get_retry_policy().get_max_attempts():
-            mgr._retries += 1
-            mgr._next_timer = threading.Timer(
-                mgr._config.get_retry_policy().get_delay_in_ms() / 1000,
-                _async_task_executor,
-                args=(mgr_ref,)
-            )
-            mgr._next_timer.daemon = True
-            mgr._next_timer.start()
-        else:
-            if mgr._listener.on_error is None or mgr._listener.on_error() is None:
-                raise e
-
-            await mgr._listener.on_error()(e)
-    except TokenRenewalErr as e:
+    except Exception as e:
         if mgr._listener.on_error is None or mgr._listener.on_error() is None:
             raise e
 
