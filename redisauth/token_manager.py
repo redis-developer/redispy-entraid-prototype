@@ -160,9 +160,9 @@ class TokenManager:
     def acquire_token(self, force_refresh=False) -> TokenResponse:
         return TokenResponse(self._idp.request_token(force_refresh))
 
-    def _calculate_renewal_delay(self, expire_date: float, issue_date: float) -> float:
+    def _calculate_renewal_delay(self, expire_date: float) -> float:
         delay_for_lower_refresh = self._delay_for_lower_refresh(expire_date)
-        delay_for_ratio_refresh = self._delay_for_ratio_refresh(expire_date, issue_date)
+        delay_for_ratio_refresh = self._delay_for_ratio_refresh(expire_date)
         delay = min(delay_for_ratio_refresh, delay_for_lower_refresh)
 
         return 0 if delay < 0 else delay / 1000
@@ -171,8 +171,8 @@ class TokenManager:
         return (expire_date - self._config.get_lower_refresh_bound_millis() -
                 (datetime.now(timezone.utc).timestamp() * 1000))
 
-    def _delay_for_ratio_refresh(self, expire_date: float, issue_date: float):
-        token_ttl = expire_date - issue_date
+    def _delay_for_ratio_refresh(self, expire_date: float):
+        token_ttl = expire_date - (datetime.now(timezone.utc).timestamp() * 1000)
         refresh_before = token_ttl - (token_ttl * self._config.get_expiration_refresh_ratio())
 
         return expire_date - refresh_before - (datetime.now(timezone.utc).timestamp() * 1000)
@@ -197,7 +197,6 @@ def _renew_token(mgr_ref: weakref.ref[TokenManager]):
         token_res = mgr.acquire_token(force_refresh=True)
         delay = mgr._calculate_renewal_delay(
             token_res.get_token().get_expires_at_ms(),
-            token_res.get_token().get_received_at_ms()
         )
 
         if token_res.get_token().is_expired():
