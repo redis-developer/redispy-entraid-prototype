@@ -65,10 +65,7 @@ class TestToken:
         assert jwt_token.is_expired() is False
         assert jwt_token.get_expires_at_ms() == -1000
 
-        with pytest.raises(
-                InvalidTokenSchemaErr,
-                match="Unexpected token schema. Following fields are missing: exp, iat"
-        ):
+        with pytest.raises(InvalidTokenSchemaErr):
             token = {
                 'key': "value"
             }

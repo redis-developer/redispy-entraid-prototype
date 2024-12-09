@@ -1,10 +1,7 @@
 import threading
 import weakref
 from datetime import datetime, timezone
-from time import sleep
-from typing import Callable, Any, Awaitable, Coroutine, Union
-
-import asyncio
+from typing import Callable, Any
 
 from redisauth.err import RequestTokenErr, TokenRenewalErr
 from redisauth.idp import IdentityProviderInterface
@@ -17,26 +14,25 @@ logger = logging.getLogger(__name__)
 class CredentialsListener:
     """
     Listeners that will be notified on events related to credentials.
-    Accepts callbacks and awaitable callbacks.
     """
     def __init__(self):
         self._on_next = None
         self._on_error = None
 
     @property
-    def on_next(self) -> Union[weakref.WeakMethod[Callable[[Any], None]], Awaitable]:
+    def on_next(self) -> weakref.WeakMethod[Callable[[Any], None]]:
         return self._on_next
 
     @on_next.setter
-    def on_next(self, callback: Union[Callable[[Any], None], Awaitable]) -> None:
+    def on_next(self, callback: Callable[[Any], None]) -> None:
         self._on_next = weakref.WeakMethod(callback)
 
     @property
-    def on_error(self) -> Union[weakref.WeakMethod[Callable[[Exception], None]], Awaitable]:
+    def on_error(self) -> weakref.WeakMethod[Callable[[Exception], None]]:
         return self._on_error
 
     @on_error.setter
-    def on_error(self, callback: Union[Callable[[Exception], None], Awaitable]) -> None:
+    def on_error(self, callback: Callable[[Exception], None]) -> None:
         self._on_error = weakref.WeakMethod(callback)
 
 

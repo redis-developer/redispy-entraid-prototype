@@ -11,6 +11,9 @@ setup(
         ],
         exclude=["tests", ".github"]
     ),
+    install_requires=[
+        "PyJWT~=2.9.0",
+    ],
     url="https://github.com/redis-developer/redispy-entra-prototype",
     author="Redis Inc.",
     author_email="oss@redis.com",
