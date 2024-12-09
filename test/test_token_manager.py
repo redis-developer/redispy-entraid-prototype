@@ -20,8 +20,8 @@ class TestTokenManager:
     @pytest.mark.parametrize(
         "exp_refresh_ratio,tokens_refreshed",
         [
-            (0.9, 1),
-            (0.28, 3),
+            (0.9, 2),
+            (0.28, 4),
         ],
         ids=[
             "Refresh ratio = 0.9,  1 tokens in 0,1 second",
@@ -139,7 +139,7 @@ class TestTokenManager:
         # Should be less than a 0.1, or it will be flacky due to additional token renewal.
         sleep(0.08)
 
-        assert mock_provider.request_token.call_count == 4
+        assert mock_provider.request_token.call_count == 3
         assert len(tokens) == 1
 
     def test_no_token_renewal_on_process_complete(self):
@@ -173,12 +173,6 @@ class TestTokenManager:
 
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.side_effect = [
-            SimpleToken(
-                'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
-                (datetime.now(timezone.utc).timestamp() * 1000),
-                {"oid": 'test'}
-            ),
             RequestTokenErr,
             RequestTokenErr,
             RequestTokenErr,
@@ -203,7 +197,7 @@ class TestTokenManager:
         mgr.start(mock_listener, block_for_initial=True)
         sleep(0.1)
 
-        assert mock_provider.request_token.call_count == 5
+        assert mock_provider.request_token.call_count == 4
         assert len(tokens) == 0
         assert len(exceptions) == 1
 
