@@ -1,7 +1,6 @@
 import threading
 import weakref
 from datetime import datetime, timezone
-from time import sleep
 from typing import Callable, Any, Awaitable, Coroutine, Union
 
 import asyncio

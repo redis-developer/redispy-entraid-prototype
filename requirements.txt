@@ -1,2 +1,2 @@
-redis @ git+https://github.com/redis/redis-py.git/@vv-tba-support
 asyncio
+PyJWT~=2.9.0
