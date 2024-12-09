@@ -157,9 +157,6 @@ class TokenManager:
         if self._next_timer is not None:
             self._next_timer.cancel()
 
-    async def stop_async(self):
-        return self.stop()
-
     def acquire_token(self, force_refresh=False) -> TokenResponse:
         return TokenResponse(self._idp.request_token(force_refresh))
 
