@@ -44,7 +44,7 @@ class TokenResponse:
 
 
 class SimpleToken(TokenInterface):
-    def __init__(self, value: str, expires_at_ms: float, received_at_ms: float, claims: dict[str, str]) -> None:
+    def __init__(self, value: str, expires_at_ms: float, received_at_ms: float, claims: dict) -> None:
         self.value = value
         self.expires_at = expires_at_ms
         self.received_at = received_at_ms
@@ -77,7 +77,7 @@ class SimpleToken(TokenInterface):
 
 class JWToken(TokenInterface):
 
-    REQUIRED_FIELDS = {'exp', 'iat'}
+    REQUIRED_FIELDS = {'exp'}
 
     def __init__(self, token: str):
         self._value = token
