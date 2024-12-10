@@ -159,6 +159,87 @@ class TestTokenManager:
 
         assert len(tokens) == tokens_acquired
 
+    def test_token_renewal_with_skip_initial(self):
+        tokens = []
+        mock_provider = Mock(spec=IdentityProviderInterface)
+        mock_provider.request_token.side_effect = [
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 120,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 140,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+        ]
+
+        def on_next(token):
+            nonlocal tokens
+            tokens.append(token)
+
+        mock_listener = Mock(spec=CredentialsListener)
+        mock_listener.on_next = on_next
+
+        retry_policy = RetryPolicy(3, 10)
+        config = TokenManagerConfig(1, 0, 1000, retry_policy)
+        mgr = TokenManager(mock_provider, config)
+        mgr.start(mock_listener, skip_initial=True)
+        # Should be less than a 0.1, or it will be flacky due to additional token renewal.
+        sleep(0.2)
+
+        assert len(tokens) == 2
+
+    @pytest.mark.asyncio
+    async def test_async_token_renewal_with_skip_initial(self):
+        tokens = []
+        mock_provider = Mock(spec=IdentityProviderInterface)
+        mock_provider.request_token.side_effect = [
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 120,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+            SimpleToken(
+                'value',
+                (datetime.now(timezone.utc).timestamp() * 1000) + 140,
+                (datetime.now(timezone.utc).timestamp() * 1000),
+                {"oid": 'test'}
+            ),
+        ]
+
+        async def on_next(token):
+            nonlocal tokens
+            tokens.append(token)
+
+        mock_listener = Mock(spec=CredentialsListener)
+        mock_listener.on_next = on_next
+
+        retry_policy = RetryPolicy(3, 10)
+        config = TokenManagerConfig(1, 0, 1000, retry_policy)
+        mgr = TokenManager(mock_provider, config)
+        await mgr.start_async(mock_listener, skip_initial=True)
+        # Should be less than a 0.1, or it will be flacky due to additional token renewal.
+        await asyncio.sleep(0.2)
+
+        assert len(tokens) == 2
+
     def test_success_token_renewal_with_retry(self):
         tokens = []
         mock_provider = Mock(spec=IdentityProviderInterface)

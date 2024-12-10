@@ -127,6 +127,7 @@ class TokenManager:
     def start(
             self,
             listener: CredentialsListener,
+            skip_initial: bool = False,
     ) -> Callable[[], None]:
         self._listener = listener
 
@@ -147,6 +148,7 @@ class TokenManager:
         self._init_timer = loop.call_later(
             0,
             self._renew_token,
+            skip_initial,
             init_event
         )
 
@@ -159,6 +161,7 @@ class TokenManager:
             listener: CredentialsListener,
             block_for_initial: bool = False,
             initial_delay_in_ms: float = 0,
+            skip_initial: bool = False,
     ) -> Callable[[], Coroutine[Any, Any, None]]:
         self._listener = listener
 
@@ -166,7 +169,7 @@ class TokenManager:
         init_event = asyncio.Event()
 
         # Wraps the async callback with async wrapper to schedule with loop.call_later()
-        wrapped = _async_to_sync_wrapper(loop, self._renew_token_async, init_event)
+        wrapped = _async_to_sync_wrapper(loop, self._renew_token_async, skip_initial, init_event)
         self._init_timer = loop.call_later(initial_delay_in_ms / 1000, wrapped)
 
         if block_for_initial:
@@ -226,7 +229,7 @@ class TokenManager:
 
         return expire_date - refresh_before - (datetime.now(timezone.utc).timestamp() * 1000)
 
-    def _renew_token(self, init_event: asyncio.Event = None):
+    def _renew_token(self, skip_initial: bool = False, init_event: asyncio.Event = None):
         """
         Task to renew token from identity provider.
         Schedules renewal tasks based on token TTL.
@@ -245,10 +248,11 @@ class TokenManager:
             if self._listener.on_next is None:
                 return
 
-            try:
-                self._listener.on_next(token_res.get_token())
-            except Exception as e:
-                raise TokenRenewalErr(e)
+            if not skip_initial:
+                try:
+                    self._listener.on_next(token_res.get_token())
+                except Exception as e:
+                    raise TokenRenewalErr(e)
 
             if delay <= 0:
                 return
@@ -265,7 +269,7 @@ class TokenManager:
             if init_event:
                 init_event.set()
 
-    async def _renew_token_async(self, init_event: asyncio.Event = None):
+    async def _renew_token_async(self, skip_initial: bool = False, init_event: asyncio.Event = None):
         """
         Async task to renew tokens from identity provider.
         Schedules renewal tasks based on token TTL.
@@ -284,10 +288,11 @@ class TokenManager:
             if self._listener.on_next is None:
                 return
 
-            try:
-                await self._listener.on_next(token_res.get_token())
-            except Exception as e:
-                raise TokenRenewalErr(e)
+            if not skip_initial:
+                try:
+                    await self._listener.on_next(token_res.get_token())
+                except Exception as e:
+                    raise TokenRenewalErr(e)
 
             if delay <= 0:
                 return
