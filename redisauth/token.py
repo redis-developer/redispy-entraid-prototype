@@ -112,7 +112,7 @@ class JWToken(TokenInterface):
         return float(self._decoded['exp'] * 1000)
 
     def get_received_at_ms(self) -> float:
-        return float(self._decoded['iat'] * 1000)
+        return datetime.now(timezone.utc).timestamp() * 1000
 
     def _validate_token(self):
         actual_fields = {x for x in self._decoded.keys()}

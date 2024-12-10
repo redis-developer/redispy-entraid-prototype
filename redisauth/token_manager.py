@@ -1,4 +1,5 @@
 import threading
+import time
 import weakref
 from datetime import datetime, timezone
 from time import sleep
@@ -120,7 +121,6 @@ class TokenManager:
         self._idp = identity_provider
         self._config = config
         self._next_timer = None
-        self._stop_event = threading.Event()
         self._listener = None
         self._init_timer = None
         self._retries = 0
@@ -136,25 +136,26 @@ class TokenManager:
     ) -> Callable[[], None]:
         self._listener = listener
 
-        if initial_delay_in_ms <= 0:
-            token_res = self.acquire_token()
-            initial_delay_in_ms = self._calculate_renewal_delay(
-                token_res.get_token().get_expires_at_ms(),
-                token_res.get_token().get_received_at_ms()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(
+                target=_start_event_loop_in_thread,
+                args=(loop,),
+                daemon=True
             )
+            thread.start()
 
-        # Schedule initial task, that will run subsequent tasks with interval.
-        # Weakref is used to make sure that GC can stop child thread correctly.
-        self._init_timer = threading.Timer(
+        event = asyncio.Event()
+        self._init_timer = loop.call_later(
             initial_delay_in_ms / 1000,
-            _renew_token,
-            args=(weakref.ref(self),)
+            self._renew_token,
+            event
         )
-        self._init_timer.daemon = True
-        self._init_timer.start()
 
         if block_for_initial:
-            self._init_timer.join()
+            asyncio.run_coroutine_threadsafe(event.wait(), loop).result()
 
         return self.stop
 
@@ -166,31 +167,17 @@ class TokenManager:
     ) -> Callable[[], Coroutine[Any, Any, None]]:
         self._listener = listener
 
-        if initial_delay_in_ms <= 0:
-            token_res = await self.acquire_token_async()
-            initial_delay_in_ms = self._calculate_renewal_delay(
-                token_res.get_token().get_expires_at_ms(),
-                token_res.get_token().get_received_at_ms()
-            )
-
-        # Schedule initial task, that will run subsequent tasks with interval.
-        # Weakref is used to make sure that GC can stop child thread correctly.
-        self._init_timer = threading.Timer(
-            initial_delay_in_ms / 1000,
-            _async_task_executor,
-            args=(weakref.ref(self),)
-        )
-        self._init_timer.daemon = True
-        self._init_timer.start()
+        loop = asyncio.get_running_loop()
+        event = asyncio.Event()
+        wrapped = _async_to_sync_wrapper(loop, self._renew_token_async, event)
+        self._init_timer = loop.call_later(initial_delay_in_ms / 1000, wrapped)
 
         if block_for_initial:
-            self._init_timer.join()
+            await event.wait()
 
         return self.stop_async
 
     def stop(self):
-        self._stop_event.set()
-
         if self._next_timer is not None:
             self._next_timer.cancel()
 
@@ -242,124 +229,122 @@ class TokenManager:
 
         return expire_date - refresh_before - (datetime.now(timezone.utc).timestamp() * 1000)
 
-
-# To make sure that GC isn't blocked by strong references to TokenManager object,
-# we have to use weakref, so we can stop execution whenever main thread is finished.
-def _renew_token(mgr_ref: weakref.ref[TokenManager]):
-    """
-    Task to renew token from identity provider.
-    Schedules renewal tasks based on token TTL.
-
-    :param mgr_ref:
-    :return:
-    """
-    mgr = mgr_ref()
-
-    if mgr._stop_event.is_set():
-        return None
-
-    try:
-        token_res = mgr.acquire_token(force_refresh=True)
-        delay = mgr._calculate_renewal_delay(
-            token_res.get_token().get_expires_at_ms(),
-            token_res.get_token().get_received_at_ms()
-        )
-
-        if token_res.get_token().is_expired():
-            raise TokenRenewalErr("Requested token is expired")
-
-        # If reference was already cleared by GC, return current token.
-        if mgr._listener.on_next is None or mgr._listener.on_next() is None:
-            return token_res
+    def _renew_token(self, event: asyncio.Event = None):
+        """
+        Task to renew token from identity provider.
+        Schedules renewal tasks based on token TTL.
+        """
 
         try:
-            mgr._listener.on_next()(token_res.get_token())
+            token_res = self.acquire_token(force_refresh=True)
+            delay = self._calculate_renewal_delay(
+                token_res.get_token().get_expires_at_ms(),
+                token_res.get_token().get_received_at_ms()
+            )
+
+            if token_res.get_token().is_expired():
+                raise TokenRenewalErr("Requested token is expired")
+
+            # If reference was already cleared by GC, return current token.
+            if self._listener.on_next is None or self._listener.on_next() is None:
+                return
+
+            try:
+                self._listener.on_next()(token_res.get_token())
+            except Exception as e:
+                raise TokenRenewalErr(e)
+
+            if delay <= 0:
+                return
+
+            loop = asyncio.get_running_loop()
+            self._next_timer = loop.call_later(delay, self._renew_token)
+            return token_res
         except Exception as e:
-            raise TokenRenewalErr(e)
+            if self._listener.on_error is None or self._listener.on_error() is None:
+                raise e
 
-        if delay <= 0:
-            return token_res
+            self._listener.on_error()(e)
+        finally:
+            if event:
+                event.set()
 
-        mgr._next_timer = threading.Timer(
-            delay,
-            _renew_token,
-            args=(mgr_ref,)
-        )
-        mgr._next_timer.daemon = True
-        mgr._next_timer.start()
-        return token_res
-    except Exception as e:
-        if mgr._listener.on_error is None or mgr._listener.on_error() is None:
-            raise e
-
-        mgr._listener.on_error()(e)
-
-
-async def _renew_token_async(mgr_ref: weakref.ref[TokenManager]):
-    """
-    Async task to renew tokens from identity provider.
-    Schedules renewal tasks based on token TTL.
-
-    :param mgr_ref:
-    :return:
-    """
-    mgr = mgr_ref()
-
-    try:
-        token_res = await mgr.acquire_token_async(force_refresh=True)
-        delay = mgr._calculate_renewal_delay(
-            token_res.get_token().get_expires_at_ms(),
-            token_res.get_token().get_received_at_ms()
-        )
-
-        if token_res.get_token().is_expired():
-            raise TokenRenewalErr("Requested token is expired")
-
-        # If reference was already cleared by GC, return current token.
-        if mgr._listener.on_next is None or mgr._listener.on_next() is None:
-            return token_res
+    async def _renew_token_async(self, event: asyncio.Event = None):
+        """
+        Async task to renew tokens from identity provider.
+        Schedules renewal tasks based on token TTL.
+        """
 
         try:
-            await mgr._listener.on_next()(token_res.get_token())
+            token_res = await self.acquire_token_async(force_refresh=True)
+            delay = self._calculate_renewal_delay(
+                token_res.get_token().get_expires_at_ms(),
+                token_res.get_token().get_received_at_ms()
+            )
+
+            if token_res.get_token().is_expired():
+                raise TokenRenewalErr("Requested token is expired")
+
+            # If reference was already cleared by GC, return current token.
+            if self._listener.on_next is None or self._listener.on_next() is None:
+                return
+
+            try:
+                await self._listener.on_next()(token_res.get_token())
+            except Exception as e:
+                raise TokenRenewalErr(e)
+
+            if delay <= 0:
+                return
+
+            loop = asyncio.get_running_loop()
+            wrapped = _async_to_sync_wrapper(loop, self._renew_token_async)
+            loop.call_later(delay, wrapped)
         except Exception as e:
-            raise TokenRenewalErr(e)
+            if event:
+                event.set()
 
-        if delay <= 0:
-            return token_res
+            if self._listener.on_error is None or self._listener.on_error() is None:
+                raise e
 
-        mgr._next_timer = threading.Timer(
-            delay,
-            _async_task_executor,
-            args=(mgr_ref,)
-        )
-        mgr._next_timer.daemon = True
-        mgr._next_timer.start()
-        return token_res
-    except Exception as e:
-        if mgr._listener.on_error is None or mgr._listener.on_error() is None:
-            raise e
-
-        await mgr._listener.on_error()(e)
+            await self._listener.on_error()(e)
+        finally:
+            if event:
+                event.set()
 
 
-def _async_task_executor(mgr_ref: weakref.ref[TokenManager]):
+def _async_to_sync_wrapper(loop, coro_func, *args, **kwargs):
     """
-    Wrapper function that's passing to the Timer thread.
-    Creates event loop and executes task asynchronously.
+    Wraps an asynchronous function so it can be used with loop.call_later.
 
-    :param mgr_ref:
+    :param loop: The event loop in which the coroutine will be executed.
+    :param coro_func: The coroutine function to wrap.
+    :param args: Positional arguments to pass to the coroutine function.
+    :param kwargs: Keyword arguments to pass to the coroutine function.
+    :return: A regular function suitable for loop.call_later.
+    """
+
+    def wrapped():
+        # Schedule the coroutine in the event loop
+        asyncio.ensure_future(coro_func(*args, **kwargs), loop=loop)
+
+    return wrapped
+
+
+def _start_event_loop_in_thread(event_loop: asyncio.AbstractEventLoop):
+    """
+    Starts event loop in a thread.
+    Used to be able to schedule tasks using loop.call_later.
+
+    :param event_loop:
     :return:
     """
-    mgr = mgr_ref()
+    asyncio.set_event_loop(event_loop)
+    event_loop.run_forever()
 
-    if mgr._stop_event.is_set():
-        return None
 
-    try:
-        loop = asyncio.get_running_loop()
-        loop.run_until_complete(_renew_token_async(mgr_ref))
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(_renew_token_async(mgr_ref))
-        loop.close()
+def _wait_for_event(event: asyncio.Event):
+    async def wait():
+        await event.wait()
+
+    asyncio.run(wait())

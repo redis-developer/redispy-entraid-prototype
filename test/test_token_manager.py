@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from time import sleep
 from unittest.mock import Mock
 
+import asyncio
 import pytest
 
 from redisauth.err import RequestTokenErr, TokenRenewalErr
@@ -20,8 +21,8 @@ class TestTokenManager:
     @pytest.mark.parametrize(
         "exp_refresh_ratio,tokens_refreshed",
         [
-            (0.9, 1),
-            (0.28, 3),
+            (0.9, 2),
+            (0.28, 4),
         ],
         ids=[
             "Refresh ratio = 0.9,  2 tokens in 0,1 second",
@@ -72,8 +73,8 @@ class TestTokenManager:
     @pytest.mark.parametrize(
         "exp_refresh_ratio,tokens_refreshed",
         [
-            (0.9, 1),
-            (0.28, 3),
+            (0.9, 2),
+            (0.28, 4),
         ],
         ids=[
             "Refresh ratio = 0.9,  2 tokens in 0,1 second",
@@ -118,7 +119,7 @@ class TestTokenManager:
         config = TokenManagerConfig(exp_refresh_ratio, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
         await mgr.start_async(mock_listener, block_for_initial=True)
-        sleep(0.1)
+        await asyncio.sleep(0.1)
 
         assert len(tokens) == tokens_refreshed
 
@@ -203,13 +204,13 @@ class TestTokenManager:
             RequestTokenErr,
             SimpleToken(
                 'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
                 (datetime.now(timezone.utc).timestamp() * 1000),
                 {"oid": 'test'}
             ),
             SimpleToken(
                 'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
                 (datetime.now(timezone.utc).timestamp() * 1000),
                 {"oid": 'test'}
             )
@@ -241,13 +242,13 @@ class TestTokenManager:
             RequestTokenErr,
             SimpleToken(
                 'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
                 (datetime.now(timezone.utc).timestamp() * 1000),
                 {"oid": 'test'}
             ),
             SimpleToken(
                 'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
+                (datetime.now(timezone.utc).timestamp() * 1000) + 100,
                 (datetime.now(timezone.utc).timestamp() * 1000),
                 {"oid": 'test'}
             )
@@ -259,13 +260,14 @@ class TestTokenManager:
 
         mock_listener = Mock(spec=CredentialsListener)
         mock_listener.on_next = weakref.ref(on_next)
+        mock_listener.on_error = None
 
         retry_policy = RetryPolicy(3, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
         await mgr.start_async(mock_listener, block_for_initial=True)
         # Should be less than a 0.1, or it will be flacky due to additional token renewal.
-        sleep(0.08)
+        await asyncio.sleep(0.08)
 
         assert mock_provider.request_token.call_count == 4
         assert len(tokens) == 1
@@ -317,7 +319,7 @@ class TestTokenManager:
         config = TokenManagerConfig(0.9, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
         await mgr.start_async(mock_listener, block_for_initial=True)
-        sleep(0.2)
+        await asyncio.sleep(0.2)
 
         assert len(tokens) == 1
 
@@ -327,12 +329,6 @@ class TestTokenManager:
 
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.side_effect = [
-            SimpleToken(
-                'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
-                (datetime.now(timezone.utc).timestamp() * 1000),
-                {"oid": 'test'}
-            ),
             RequestTokenErr,
             RequestTokenErr,
             RequestTokenErr,
@@ -357,7 +353,7 @@ class TestTokenManager:
         mgr.start(mock_listener, block_for_initial=True)
         sleep(0.1)
 
-        assert mock_provider.request_token.call_count == 5
+        assert mock_provider.request_token.call_count == 4
         assert len(tokens) == 0
         assert len(exceptions) == 1
 
@@ -368,12 +364,6 @@ class TestTokenManager:
 
         mock_provider = Mock(spec=IdentityProviderInterface)
         mock_provider.request_token.side_effect = [
-            SimpleToken(
-                'value',
-                (datetime.now(timezone.utc).timestamp() * 1000) + 1000,
-                (datetime.now(timezone.utc).timestamp() * 1000),
-                {"oid": 'test'}
-            ),
             RequestTokenErr,
             RequestTokenErr,
             RequestTokenErr,
@@ -398,7 +388,7 @@ class TestTokenManager:
         await mgr.start_async(mock_listener, block_for_initial=True)
         sleep(0.1)
 
-        assert mock_provider.request_token.call_count == 5
+        assert mock_provider.request_token.call_count == 4
         assert len(tokens) == 0
         assert len(exceptions) == 1
 
