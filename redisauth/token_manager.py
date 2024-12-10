@@ -1,5 +1,4 @@
 import threading
-import time
 import weakref
 from datetime import datetime, timezone
 from time import sleep
@@ -10,9 +9,6 @@ import asyncio
 from redisauth.err import RequestTokenErr, TokenRenewalErr
 from redisauth.idp import IdentityProviderInterface
 from redisauth.token import TokenResponse
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class CredentialsListener:
@@ -25,20 +21,20 @@ class CredentialsListener:
         self._on_error = None
 
     @property
-    def on_next(self) -> Union[weakref.WeakMethod[Callable[[Any], None]], Awaitable]:
+    def on_next(self) -> Union[Callable[[Any], None], Awaitable]:
         return self._on_next
 
     @on_next.setter
     def on_next(self, callback: Union[Callable[[Any], None], Awaitable]) -> None:
-        self._on_next = weakref.WeakMethod(callback)
+        self._on_next = callback
 
     @property
-    def on_error(self) -> Union[weakref.WeakMethod[Callable[[Exception], None]], Awaitable]:
+    def on_error(self) -> Union[Callable[[Exception], None], Awaitable]:
         return self._on_error
 
     @on_error.setter
     def on_error(self, callback: Union[Callable[[Exception], None], Awaitable]) -> None:
-        self._on_error = weakref.WeakMethod(callback)
+        self._on_error = callback
 
 
 class RetryPolicy:
@@ -139,6 +135,7 @@ class TokenManager:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+            # Run loop in a separate thread to unblock main thread.
             loop = asyncio.new_event_loop()
             thread = threading.Thread(
                 target=_start_event_loop_in_thread,
@@ -147,15 +144,17 @@ class TokenManager:
             )
             thread.start()
 
-        event = asyncio.Event()
+        # Event to block for initial execution.
+        init_event = asyncio.Event()
         self._init_timer = loop.call_later(
             initial_delay_in_ms / 1000,
             self._renew_token,
-            event
+            init_event
         )
 
         if block_for_initial:
-            asyncio.run_coroutine_threadsafe(event.wait(), loop).result()
+            # Blocks in thread-safe maner.
+            asyncio.run_coroutine_threadsafe(init_event.wait(), loop).result()
 
         return self.stop
 
@@ -168,12 +167,14 @@ class TokenManager:
         self._listener = listener
 
         loop = asyncio.get_running_loop()
-        event = asyncio.Event()
-        wrapped = _async_to_sync_wrapper(loop, self._renew_token_async, event)
+        init_event = asyncio.Event()
+
+        # Wraps the async callback with async wrapper to schedule with loop.call_later()
+        wrapped = _async_to_sync_wrapper(loop, self._renew_token_async, init_event)
         self._init_timer = loop.call_later(initial_delay_in_ms / 1000, wrapped)
 
         if block_for_initial:
-            await event.wait()
+            await init_event.wait()
 
         return self.stop_async
 
@@ -229,7 +230,7 @@ class TokenManager:
 
         return expire_date - refresh_before - (datetime.now(timezone.utc).timestamp() * 1000)
 
-    def _renew_token(self, event: asyncio.Event = None):
+    def _renew_token(self, init_event: asyncio.Event = None):
         """
         Task to renew token from identity provider.
         Schedules renewal tasks based on token TTL.
@@ -266,10 +267,10 @@ class TokenManager:
 
             self._listener.on_error()(e)
         finally:
-            if event:
-                event.set()
+            if init_event:
+                init_event.set()
 
-    async def _renew_token_async(self, event: asyncio.Event = None):
+    async def _renew_token_async(self, init_event: asyncio.Event = None):
         """
         Async task to renew tokens from identity provider.
         Schedules renewal tasks based on token TTL.
@@ -301,16 +302,16 @@ class TokenManager:
             wrapped = _async_to_sync_wrapper(loop, self._renew_token_async)
             loop.call_later(delay, wrapped)
         except Exception as e:
-            if event:
-                event.set()
+            if init_event:
+                init_event.set()
 
             if self._listener.on_error is None or self._listener.on_error() is None:
                 raise e
 
             await self._listener.on_error()(e)
         finally:
-            if event:
-                event.set()
+            if init_event:
+                init_event.set()
 
 
 def _async_to_sync_wrapper(loop, coro_func, *args, **kwargs):
