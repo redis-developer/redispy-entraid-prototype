@@ -342,10 +342,3 @@ def _start_event_loop_in_thread(event_loop: asyncio.AbstractEventLoop):
     """
     asyncio.set_event_loop(event_loop)
     event_loop.run_forever()
-
-
-def _wait_for_event(event: asyncio.Event):
-    async def wait():
-        await event.wait()
-
-    asyncio.run(wait())

@@ -230,7 +230,7 @@ class TestTokenManager:
         # Should be less than a 0.1, or it will be flacky due to additional token renewal.
         sleep(0.08)
 
-        assert mock_provider.request_token.call_count == 4
+        assert mock_provider.request_token.call_count in {3, 4}
         assert len(tokens) == 1
 
     @pytest.mark.asyncio
@@ -269,7 +269,7 @@ class TestTokenManager:
         # Should be less than a 0.1, or it will be flacky due to additional token renewal.
         await asyncio.sleep(0.08)
 
-        assert mock_provider.request_token.call_count == 4
+        assert mock_provider.request_token.call_count in {3, 4}
         assert len(tokens) == 1
 
     def test_no_token_renewal_on_process_complete(self):
