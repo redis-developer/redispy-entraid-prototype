@@ -64,7 +64,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(exp_refresh_ratio, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
         sleep(0.1)
 
         assert len(tokens) == tokens_refreshed
@@ -133,42 +133,6 @@ class TestTokenManager:
             "Non blocked, callback wont be triggered",
         ]
     )
-    def test_request_token_blocking_behaviour(self, block_for_initial, tokens_acquired):
-        tokens = []
-        mock_provider = Mock(spec=IdentityProviderInterface)
-        mock_provider.request_token.return_value = SimpleToken(
-            'value',
-            (datetime.now(timezone.utc).timestamp() * 1000) + 100,
-            (datetime.now(timezone.utc).timestamp() * 1000),
-            {"oid": 'test'}
-        )
-
-        def on_next(token):
-            nonlocal tokens
-            sleep(0.1)
-            tokens.append(token)
-
-        mock_listener = Mock(spec=CredentialsListener)
-        mock_listener.on_next = on_next
-
-        retry_policy = RetryPolicy(1, 10)
-        config = TokenManagerConfig(1, 0, 1000, retry_policy)
-        mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=block_for_initial)
-
-        assert len(tokens) == tokens_acquired
-
-    @pytest.mark.parametrize(
-        "block_for_initial,tokens_acquired",
-        [
-            (True, 1),
-            (False, 0),
-        ],
-        ids=[
-            "Block for initial, callback will triggered once",
-            "Non blocked, callback wont be triggered",
-        ]
-    )
     @pytest.mark.asyncio
     async def test_async_request_token_blocking_behaviour(self, block_for_initial, tokens_acquired):
         tokens = []
@@ -225,7 +189,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(3, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
         # Should be less than a 0.1, or it will be flacky due to additional token renewal.
         sleep(0.08)
 
@@ -291,7 +255,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(0.9, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
         sleep(0.2)
 
         assert len(tokens) == 1
@@ -349,7 +313,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(3, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
         sleep(0.1)
 
         assert mock_provider.request_token.call_count == 4
@@ -411,7 +375,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
 
         assert len(errors) == 1
         assert isinstance(errors[0], TokenRenewalErr)
@@ -468,7 +432,7 @@ class TestTokenManager:
         retry_policy = RetryPolicy(1, 10)
         config = TokenManagerConfig(1, 0, 1000, retry_policy)
         mgr = TokenManager(mock_provider, config)
-        mgr.start(mock_listener, block_for_initial=True)
+        mgr.start(mock_listener)
 
         assert len(errors) == 1
         assert isinstance(errors[0], TokenRenewalErr)

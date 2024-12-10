@@ -127,8 +127,6 @@ class TokenManager:
     def start(
             self,
             listener: CredentialsListener,
-            block_for_initial: bool = False,
-            initial_delay_in_ms: float = 0,
     ) -> Callable[[], None]:
         self._listener = listener
 
@@ -147,15 +145,13 @@ class TokenManager:
         # Event to block for initial execution.
         init_event = asyncio.Event()
         self._init_timer = loop.call_later(
-            initial_delay_in_ms / 1000,
+            0,
             self._renew_token,
             init_event
         )
 
-        if block_for_initial:
-            # Blocks in thread-safe maner.
-            asyncio.run_coroutine_threadsafe(init_event.wait(), loop).result()
-
+        # Blocks in thread-safe maner.
+        asyncio.run_coroutine_threadsafe(init_event.wait(), loop).result()
         return self.stop
 
     async def start_async(
